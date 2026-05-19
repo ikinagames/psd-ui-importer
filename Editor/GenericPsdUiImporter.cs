@@ -1,11 +1,13 @@
 ﻿#if UNITY_EDITOR
 using System;
 using System.Collections.Generic;
+using System.Globalization;
 using System.IO;
 using System.Linq;
 using Newtonsoft.Json.Linq;
 using TMPro;
 using UnityEditor;
+using UnityEditor.PackageManager;
 using UnityEngine;
 using UnityEngine.UI;
 
@@ -16,15 +18,29 @@ using UnityEngine.UI;
 /// </summary>
 public sealed class GenericPsdUiImporter : EditorWindow
 {
+    private const string PrefPsdSourceDir = "GenericPsdUiImporter.PsdSourceDir";
     private const string PrefMetadataDir = "GenericPsdUiImporter.MetadataDir";
     private const string PrefSpriteRootDir = "GenericPsdUiImporter.SpriteRootDir";
     private const string PrefOutputDir = "GenericPsdUiImporter.OutputDir";
+    private const string PrefExportScale = "GenericPsdUiImporter.ExportScale";
+    private const string PrefExportMaxDim = "GenericPsdUiImporter.ExportMaxDim";
+    private const string PrefExportPotSnap = "GenericPsdUiImporter.ExportPotSnap";
+    private const string PrefExportPotThreshold = "GenericPsdUiImporter.ExportPotThreshold";
+    private const string PrefExportForceTopil = "GenericPsdUiImporter.ExportForceTopil";
+    private const string PrefExportSnapAlpha = "GenericPsdUiImporter.ExportSnapAlpha";
 
     private static readonly string[] SkipLayerPrefixes = { "!ref" };
 
+    [SerializeField] private string psdSourceDir = "Assets/Art/PSD";
     [SerializeField] private string metadataDir = "Assets/Art/Extracted";
     [SerializeField] private string spriteRootDir = "Assets/Art/Extracted";
     [SerializeField] private string outputDir = "Assets/Resources/UI/Prefabs/Generated";
+    [SerializeField] private float exportScale = 1f;
+    [SerializeField] private int exportMaxDim;
+    [SerializeField] private bool exportPotSnap;
+    [SerializeField] private float exportPotThreshold = 1.05f;
+    [SerializeField] private bool exportForceTopil;
+    [SerializeField] private int exportSnapAlpha = -1;
     [SerializeField] private bool replaceExistingContent = true;
     [SerializeField] private bool prepareSprites = true;
     [SerializeField] private bool convertTmpLayers = true;
@@ -85,10 +101,34 @@ public sealed class GenericPsdUiImporter : EditorWindow
     {
         EditorGUILayout.LabelField("Generic PSD UI Importer", EditorStyles.boldLabel);
         EditorGUILayout.HelpBox(
-            "Builds UI prefabs from extracted PSD JSON + PNG files. Existing puzzle importers are not touched.",
+            "Extract PSD/PSB files into JSON + PNG files, then build UI prefabs from those exports. Project-specific importers can be built on top of this generic workflow.",
             MessageType.Info);
 
-        DrawPathField("Metadata JSON Folder", ref metadataDir, true);
+        EditorGUILayout.LabelField("PSD Extract", EditorStyles.boldLabel);
+        DrawPathField("Source PSD Folder", ref psdSourceDir, true);
+        DrawPathField("Extract Output Folder", ref metadataDir, true);
+        exportScale = Mathf.Max(0.01f, EditorGUILayout.FloatField("Export Scale", exportScale));
+        exportMaxDim = Mathf.Max(0, EditorGUILayout.IntField("Max Image Dimension", exportMaxDim));
+        exportPotSnap = EditorGUILayout.ToggleLeft("Snap near power-of-two textures", exportPotSnap);
+        using (new EditorGUI.DisabledScope(!exportPotSnap))
+            exportPotThreshold = Mathf.Max(1.001f, EditorGUILayout.FloatField("POT Threshold", exportPotThreshold));
+        exportForceTopil = EditorGUILayout.ToggleLeft("Force topil export only", exportForceTopil);
+        exportSnapAlpha = EditorGUILayout.IntField("Snap Alpha Threshold (-1 off)", exportSnapAlpha);
+
+        using (new EditorGUILayout.HorizontalScope())
+        {
+            if (GUILayout.Button("Extract PSDs", GUILayout.Height(28f)))
+                ExtractPsdFiles();
+
+            if (GUILayout.Button("Extract PSDs + Build UI Prefabs", GUILayout.Height(28f)))
+            {
+                if (ExtractPsdFiles())
+                    BuildSelected();
+            }
+        }
+
+        EditorGUILayout.Space(10f);
+        EditorGUILayout.LabelField("Build From Extracted JSON", EditorStyles.boldLabel);
         DrawPathField("Sprite Root Folder", ref spriteRootDir, true);
         DrawPathField("Output Prefab Folder", ref outputDir, true);
 
@@ -524,18 +564,194 @@ public sealed class GenericPsdUiImporter : EditorWindow
             importer.SaveAndReimport();
     }
 
+    private bool ExtractPsdFiles()
+    {
+        SavePrefs();
+
+        string sourceDir = ToAbsolutePath(psdSourceDir);
+        if (!Directory.Exists(sourceDir))
+        {
+            EditorUtility.DisplayDialog("PSD Extract", $"Source PSD folder not found:\n{psdSourceDir}", "OK");
+            statusMessage = $"Source PSD folder not found: {psdSourceDir}";
+            return false;
+        }
+
+        string scriptPath = GetExtractScriptPath();
+        if (string.IsNullOrEmpty(scriptPath) || !File.Exists(scriptPath))
+        {
+            EditorUtility.DisplayDialog("PSD Extract", "extract_psd.py was not found inside the package.", "OK");
+            statusMessage = "extract_psd.py was not found inside the package.";
+            return false;
+        }
+
+        if (!FindPython(out string pythonCommand, out string pythonPrefix))
+        {
+            EditorUtility.DisplayDialog(
+                "PSD Extract",
+                "Python 3.x was not found. Install Python, then run:\n\npip install psd-tools pillow",
+                "OK");
+            statusMessage = "Python 3.x not found. Install Python and psd-tools/pillow.";
+            return false;
+        }
+
+        string outputDirAbsolute = ToAbsolutePath(metadataDir);
+        Directory.CreateDirectory(outputDirAbsolute);
+
+        string scaleText = exportScale.ToString("0.####", CultureInfo.InvariantCulture);
+        string thresholdText = exportPotThreshold.ToString("0.####", CultureInfo.InvariantCulture);
+        string args = $"{pythonPrefix}{Quote(scriptPath)} --psd-dir {Quote(sourceDir)} --out-dir {Quote(outputDirAbsolute)} --scale {scaleText} --max-dim {exportMaxDim} --pot-threshold {thresholdText}";
+        if (exportPotSnap)
+            args += " --pot-snap";
+        if (exportForceTopil)
+            args += " --force-topil";
+        if (exportSnapAlpha >= 0)
+            args += $" --snap-alpha {Mathf.Clamp(exportSnapAlpha, 0, 255)}";
+
+        try
+        {
+            var startInfo = new System.Diagnostics.ProcessStartInfo
+            {
+                FileName = pythonCommand,
+                Arguments = args,
+                WorkingDirectory = Path.GetFullPath(Path.Combine(Application.dataPath, "..")),
+                UseShellExecute = false,
+                RedirectStandardOutput = true,
+                RedirectStandardError = true,
+                CreateNoWindow = true,
+            };
+
+            using var process = System.Diagnostics.Process.Start(startInfo);
+            if (process == null)
+            {
+                statusMessage = "Failed to start Python process.";
+                return false;
+            }
+
+            string stdout = process.StandardOutput.ReadToEnd();
+            string stderr = process.StandardError.ReadToEnd();
+            process.WaitForExit();
+
+            if (!string.IsNullOrWhiteSpace(stdout))
+                Debug.Log($"[GenericPsdUiImporter] PSD extract output:\n{stdout}");
+            if (!string.IsNullOrWhiteSpace(stderr))
+                Debug.LogWarning($"[GenericPsdUiImporter] PSD extract warnings:\n{stderr}");
+
+            if (process.ExitCode != 0)
+            {
+                statusMessage = $"PSD extract failed. Exit code {process.ExitCode}. See Console.";
+                EditorUtility.DisplayDialog("PSD Extract", statusMessage, "OK");
+                return false;
+            }
+        }
+        catch (Exception ex)
+        {
+            Debug.LogException(ex);
+            statusMessage = $"PSD extract failed: {ex.Message}";
+            EditorUtility.DisplayDialog("PSD Extract", statusMessage, "OK");
+            return false;
+        }
+
+        AssetDatabase.Refresh();
+        spriteRootDir = metadataDir;
+        RefreshJsonList();
+        statusMessage = $"PSD extract complete. Output: {metadataDir}";
+        return true;
+    }
+
+    private static string GetExtractScriptPath()
+    {
+        var packageInfo = PackageInfo.FindForAssembly(typeof(GenericPsdUiImporter).Assembly);
+        if (packageInfo == null || string.IsNullOrEmpty(packageInfo.resolvedPath))
+            return null;
+
+        return Path.Combine(packageInfo.resolvedPath, "Editor", "Tools", "extract_psd.py");
+    }
+
+    private static bool FindPython(out string command, out string argumentPrefix)
+    {
+        if (TryPythonCommand("python", "--version"))
+        {
+            command = "python";
+            argumentPrefix = "";
+            return true;
+        }
+
+        if (TryPythonCommand("python3", "--version"))
+        {
+            command = "python3";
+            argumentPrefix = "";
+            return true;
+        }
+
+        if (TryPythonCommand("py", "-3 --version"))
+        {
+            command = "py";
+            argumentPrefix = "-3 ";
+            return true;
+        }
+
+        command = null;
+        argumentPrefix = null;
+        return false;
+    }
+
+    private static bool TryPythonCommand(string command, string arguments)
+    {
+        try
+        {
+            var startInfo = new System.Diagnostics.ProcessStartInfo
+            {
+                FileName = command,
+                Arguments = arguments,
+                UseShellExecute = false,
+                RedirectStandardOutput = true,
+                RedirectStandardError = true,
+                CreateNoWindow = true,
+            };
+
+            using var process = System.Diagnostics.Process.Start(startInfo);
+            if (process == null)
+                return false;
+            process.WaitForExit(3000);
+            return process.HasExited && process.ExitCode == 0;
+        }
+        catch
+        {
+            return false;
+        }
+    }
+
+    private static string Quote(string value)
+    {
+        return "\"" + value.Replace("\"", "\\\"") + "\"";
+    }
+
     private void LoadPrefs()
     {
+        psdSourceDir = EditorPrefs.GetString(PrefPsdSourceDir, psdSourceDir);
         metadataDir = EditorPrefs.GetString(PrefMetadataDir, metadataDir);
         spriteRootDir = EditorPrefs.GetString(PrefSpriteRootDir, spriteRootDir);
         outputDir = EditorPrefs.GetString(PrefOutputDir, outputDir);
+        exportScale = EditorPrefs.GetFloat(PrefExportScale, exportScale);
+        exportMaxDim = EditorPrefs.GetInt(PrefExportMaxDim, exportMaxDim);
+        exportPotSnap = EditorPrefs.GetBool(PrefExportPotSnap, exportPotSnap);
+        exportPotThreshold = EditorPrefs.GetFloat(PrefExportPotThreshold, exportPotThreshold);
+        exportForceTopil = EditorPrefs.GetBool(PrefExportForceTopil, exportForceTopil);
+        exportSnapAlpha = EditorPrefs.GetInt(PrefExportSnapAlpha, exportSnapAlpha);
     }
 
     private void SavePrefs()
     {
+        EditorPrefs.SetString(PrefPsdSourceDir, psdSourceDir);
         EditorPrefs.SetString(PrefMetadataDir, metadataDir);
         EditorPrefs.SetString(PrefSpriteRootDir, spriteRootDir);
         EditorPrefs.SetString(PrefOutputDir, outputDir);
+        EditorPrefs.SetFloat(PrefExportScale, exportScale);
+        EditorPrefs.SetInt(PrefExportMaxDim, exportMaxDim);
+        EditorPrefs.SetBool(PrefExportPotSnap, exportPotSnap);
+        EditorPrefs.SetFloat(PrefExportPotThreshold, exportPotThreshold);
+        EditorPrefs.SetBool(PrefExportForceTopil, exportForceTopil);
+        EditorPrefs.SetInt(PrefExportSnapAlpha, exportSnapAlpha);
     }
 
     private static string ToAbsolutePath(string assetPath)
@@ -557,5 +773,8 @@ public sealed class GenericPsdUiImporter : EditorWindow
     }
 }
 #endif
+
+
+
 
 

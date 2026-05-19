@@ -1,6 +1,6 @@
-﻿{
-  "name": "com.kuukiyomi.psd-ui-importer",
-  "version": "0.1.0",
+{
+  "name": "com.ikinagames.psd-ui-importer",
+  "version": "0.1.1",
   "displayName": "PSD UI Importer",
   "description": "Generic Unity editor tool that builds UI prefabs from extracted PSD JSON and PNG layers.",
   "unity": "6000.0",
@@ -11,7 +11,7 @@
     "prefab"
   ],
   "author": {
-    "name": "KUUKIYOMI KR"
+    "name": "LuckyCat"
   },
   "dependencies": {
     "com.unity.ugui": "2.0.0",

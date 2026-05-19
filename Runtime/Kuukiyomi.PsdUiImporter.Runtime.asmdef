@@ -1,0 +1,14 @@
+﻿{
+  "name": "Kuukiyomi.PsdUiImporter.Runtime",
+  "rootNamespace": "Kuukiyomi.PsdUiImporter",
+  "references": [],
+  "includePlatforms": [],
+  "excludePlatforms": [],
+  "allowUnsafeCode": false,
+  "overrideReferences": false,
+  "precompiledReferences": [],
+  "autoReferenced": true,
+  "defineConstraints": [],
+  "versionDefines": [],
+  "noEngineReferences": false
+}

@@ -1,0 +1,21 @@
+﻿{
+  "name": "com.kuukiyomi.psd-ui-importer",
+  "version": "0.1.0",
+  "displayName": "PSD UI Importer",
+  "description": "Generic Unity editor tool that builds UI prefabs from extracted PSD JSON and PNG layers.",
+  "unity": "6000.0",
+  "keywords": [
+    "psd",
+    "ui",
+    "importer",
+    "prefab"
+  ],
+  "author": {
+    "name": "KUUKIYOMI KR"
+  },
+  "dependencies": {
+    "com.unity.ugui": "2.0.0",
+    "com.unity.textmeshpro": "5.0.0",
+    "com.unity.nuget.newtonsoft-json": "3.2.2"
+  }
+}

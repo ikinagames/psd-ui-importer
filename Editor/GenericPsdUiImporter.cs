@@ -584,7 +584,7 @@ public sealed class GenericPsdUiImporter : EditorWindow
             return false;
         }
 
-        if (!FindPython(out string pythonCommand, out string pythonPrefix))
+        if (!FindPython(out string pythonCommand, out bool usePyLauncher))
         {
             EditorUtility.DisplayDialog(
                 "PSD Extract",
@@ -599,26 +599,41 @@ public sealed class GenericPsdUiImporter : EditorWindow
 
         string scaleText = exportScale.ToString("0.####", CultureInfo.InvariantCulture);
         string thresholdText = exportPotThreshold.ToString("0.####", CultureInfo.InvariantCulture);
-        string args = $"{pythonPrefix}{Quote(scriptPath)} --psd-dir {Quote(sourceDir)} --out-dir {Quote(outputDirAbsolute)} --scale {scaleText} --max-dim {exportMaxDim} --pot-threshold {thresholdText}";
-        if (exportPotSnap)
-            args += " --pot-snap";
-        if (exportForceTopil)
-            args += " --force-topil";
-        if (exportSnapAlpha >= 0)
-            args += $" --snap-alpha {Mathf.Clamp(exportSnapAlpha, 0, 255)}";
 
         try
         {
             var startInfo = new System.Diagnostics.ProcessStartInfo
             {
                 FileName = pythonCommand,
-                Arguments = args,
                 WorkingDirectory = Path.GetFullPath(Path.Combine(Application.dataPath, "..")),
                 UseShellExecute = false,
                 RedirectStandardOutput = true,
                 RedirectStandardError = true,
                 CreateNoWindow = true,
             };
+
+            if (usePyLauncher)
+                startInfo.ArgumentList.Add("-3");
+            startInfo.ArgumentList.Add(scriptPath);
+            startInfo.ArgumentList.Add("--psd-dir");
+            startInfo.ArgumentList.Add(sourceDir);
+            startInfo.ArgumentList.Add("--out-dir");
+            startInfo.ArgumentList.Add(outputDirAbsolute);
+            startInfo.ArgumentList.Add("--scale");
+            startInfo.ArgumentList.Add(scaleText);
+            startInfo.ArgumentList.Add("--max-dim");
+            startInfo.ArgumentList.Add(exportMaxDim.ToString(CultureInfo.InvariantCulture));
+            startInfo.ArgumentList.Add("--pot-threshold");
+            startInfo.ArgumentList.Add(thresholdText);
+            if (exportPotSnap)
+                startInfo.ArgumentList.Add("--pot-snap");
+            if (exportForceTopil)
+                startInfo.ArgumentList.Add("--force-topil");
+            if (exportSnapAlpha >= 0)
+            {
+                startInfo.ArgumentList.Add("--snap-alpha");
+                startInfo.ArgumentList.Add(Mathf.Clamp(exportSnapAlpha, 0, 255).ToString(CultureInfo.InvariantCulture));
+            }
 
             using var process = System.Diagnostics.Process.Start(startInfo);
             if (process == null)
@@ -667,31 +682,31 @@ public sealed class GenericPsdUiImporter : EditorWindow
         return Path.Combine(packageInfo.resolvedPath, "Editor", "Tools", "extract_psd.py");
     }
 
-    private static bool FindPython(out string command, out string argumentPrefix)
+    private static bool FindPython(out string command, out bool usePyLauncher)
     {
         if (TryPythonCommand("python", "--version"))
         {
             command = "python";
-            argumentPrefix = "";
+            usePyLauncher = false;
             return true;
         }
 
         if (TryPythonCommand("python3", "--version"))
         {
             command = "python3";
-            argumentPrefix = "";
+            usePyLauncher = false;
             return true;
         }
 
         if (TryPythonCommand("py", "-3 --version"))
         {
             command = "py";
-            argumentPrefix = "-3 ";
+            usePyLauncher = true;
             return true;
         }
 
         command = null;
-        argumentPrefix = null;
+        usePyLauncher = false;
         return false;
     }
 
@@ -721,10 +736,7 @@ public sealed class GenericPsdUiImporter : EditorWindow
         }
     }
 
-    private static string Quote(string value)
-    {
-        return "\"" + value.Replace("\"", "\\\"") + "\"";
-    }
+
 
     private void LoadPrefs()
     {
@@ -773,6 +785,7 @@ public sealed class GenericPsdUiImporter : EditorWindow
     }
 }
 #endif
+
 
 
 

@@ -1,4 +1,4 @@
-#if UNITY_EDITOR
+﻿#if UNITY_EDITOR
 using System;
 using System.Collections.Generic;
 using System.IO;
@@ -38,6 +38,8 @@ public sealed class GenericPsdUiImporter : EditorWindow
     private string statusMessage = "";
     private int spriteCount;
     private int missingSpriteCount;
+    private int activeTab;
+    private readonly PsdOrphanedImageCleanerPanel orphanedImageCleaner = new();
 
     private struct JsonEntry
     {
@@ -68,8 +70,19 @@ public sealed class GenericPsdUiImporter : EditorWindow
 
     private void OnGUI()
     {
-        scroll = EditorGUILayout.BeginScrollView(scroll);
+        activeTab = GUILayout.Toolbar(activeTab, new[] { "Build UI", "Cleanup Images" });
+        EditorGUILayout.Space(4f);
 
+        scroll = EditorGUILayout.BeginScrollView(scroll);
+        if (activeTab == 0)
+            DrawBuildUiTab();
+        else
+            orphanedImageCleaner.Draw();
+        EditorGUILayout.EndScrollView();
+    }
+
+    private void DrawBuildUiTab()
+    {
         EditorGUILayout.LabelField("Generic PSD UI Importer", EditorStyles.boldLabel);
         EditorGUILayout.HelpBox(
             "Builds UI prefabs from extracted PSD JSON + PNG files. Existing puzzle importers are not touched.",
@@ -108,8 +121,6 @@ public sealed class GenericPsdUiImporter : EditorWindow
             EditorGUILayout.Space(8f);
             EditorGUILayout.HelpBox(statusMessage, MessageType.None);
         }
-
-        EditorGUILayout.EndScrollView();
     }
 
     private void DrawPathField(string label, ref string path, bool folder)
@@ -546,3 +557,5 @@ public sealed class GenericPsdUiImporter : EditorWindow
     }
 }
 #endif
+
+

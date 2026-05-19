@@ -24,3 +24,7 @@ Generic Unity editor package that builds UI prefabs from extracted PSD JSON and 
 - `!ref`: skipped reference layer/tree.
 
 Language-tagged layers are controlled by `PsdUiLanguageLayerSwitcher` on the generated prefab root.
+
+## Cleanup Images
+
+The same editor window has a `Cleanup Images` tab. It scans Texture2D assets in a selected folder and lists images that are not referenced by prefabs or scenes. Use it after regenerating PSD layer PNGs to find stale extracted images.

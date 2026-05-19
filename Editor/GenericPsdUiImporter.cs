@@ -660,7 +660,7 @@ public sealed class GenericPsdUiImporter : EditorWindow
 
     private static string GetExtractScriptPath()
     {
-        var packageInfo = PackageInfo.FindForAssembly(typeof(GenericPsdUiImporter).Assembly);
+        var packageInfo = UnityEditor.PackageManager.PackageInfo.FindForAssembly(typeof(GenericPsdUiImporter).Assembly);
         if (packageInfo == null || string.IsNullOrEmpty(packageInfo.resolvedPath))
             return null;
 
@@ -773,6 +773,7 @@ public sealed class GenericPsdUiImporter : EditorWindow
     }
 }
 #endif
+
 
 
 

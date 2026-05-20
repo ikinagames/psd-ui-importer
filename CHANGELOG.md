@@ -9,6 +9,7 @@
 - Added `PsdUiTextLocalizerBase` for project-specific localization of `!tmp` layers.
 - Added language entry rebuilding support to `PsdUiLanguageLayerSwitcher`.
 - Added a `Texture Audit` tab for prefab texture usage and import setting inspection.
+- Added `!btn`, `!item`, `!mask`, and `!cg` layer tags.
 
 ## 0.1.1
 

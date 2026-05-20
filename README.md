@@ -54,6 +54,10 @@ The `Settings` tab can optionally manage Unity Sprite Atlases. Enable `Use Sprit
 ## Layer Tags
 
 - `!tmp`: creates a TextMeshProUGUI object instead of an Image.
+- `!btn`: adds a Button component with transition set to None.
+- `!item`: saves this layer subtree as a separate item prefab. For `aa.psd` and `!item bb`, the generated prefab name is `aa_bb_Item`.
+- `!mask`: adds a Mask component.
+- `!cg`: adds a CanvasGroup component.
 - `!kr`: Korean-only layer.
 - `!en`: English-only layer.
 - `!jp`: Japanese-only layer.
@@ -61,6 +65,8 @@ The `Settings` tab can optionally manage Unity Sprite Atlases. Enable `Use Sprit
 - `!x1.5`: optional layer image scale suffix for extraction. Example: `icon !x1.5`.
 
 Language-tagged layers are controlled by `PsdUiLanguageLayerSwitcher` on the generated prefab root.
+
+The `Settings` tab includes a foldout tag reference for quick in-editor lookup.
 
 ## Generated Prefabs And Variants
 

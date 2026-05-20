@@ -29,6 +29,7 @@ public sealed class GenericPsdUiImporter : EditorWindow
     [SerializeField] private string metadataDir = "Assets/Art/Extracted";
     [SerializeField] private string spriteRootDir = "Assets/Art/Extracted";
     [SerializeField] private string outputDir = "Assets/Resources/UI/Prefabs/Generated";
+    [SerializeField] private string itemPrefabOutputDir = "Assets/Resources/UI/Prefabs/Generated/Items";
     [SerializeField] private float exportScale = 1f;
     [SerializeField] private int exportMaxDim;
     [SerializeField] private bool exportPotSnap;
@@ -53,10 +54,12 @@ public sealed class GenericPsdUiImporter : EditorWindow
     [SerializeField] private bool auditShowImportSettings = true;
     [SerializeField] private bool auditShowPlatformSettings;
     [SerializeField] private bool auditShowAtlas = true;
+    [SerializeField] private bool showTagReference;
 
     private readonly List<JsonEntry> jsonEntries = new();
     private readonly List<PsdUiLanguageLayerSwitcher.Entry> languageEntries = new();
     private readonly List<PsdUiTextLocalizerBase.Entry> textEntries = new();
+    private readonly List<ItemPrefabEntry> itemPrefabEntries = new();
     private readonly List<TextureAuditRow> textureAuditRows = new();
     private Vector2 scroll;
     private string statusMessage = "";
@@ -82,6 +85,12 @@ public sealed class GenericPsdUiImporter : EditorWindow
         public Texture2D texture;
         public Sprite sprite;
         public bool inConfiguredAtlas;
+    }
+
+    private sealed class ItemPrefabEntry
+    {
+        public GameObject root;
+        public string layerName;
     }
 
     [MenuItem("Tools/PSD UI Importer/Generic PSD UI Importer", false, 120)]
@@ -185,6 +194,7 @@ public sealed class GenericPsdUiImporter : EditorWindow
         EditorGUILayout.LabelField("Build UI", EditorStyles.boldLabel);
         DrawPathField("Sprite Root Folder", ref spriteRootDir, true);
         DrawPathField("Output Prefab Folder", ref outputDir, true);
+        DrawPathField("Item Prefab Folder", ref itemPrefabOutputDir, true);
 
         EditorGUILayout.Space(6f);
         replaceExistingContent = EditorGUILayout.ToggleLeft("Replace generated children when prefab exists", replaceExistingContent);
@@ -223,7 +233,40 @@ public sealed class GenericPsdUiImporter : EditorWindow
             }
         }
 
+        DrawTagReference();
         DrawStatusMessage();
+    }
+
+    private void DrawTagReference()
+    {
+        EditorGUILayout.Space(10f);
+        showTagReference = EditorGUILayout.Foldout(showTagReference, "Tag Reference", true);
+        if (!showTagReference)
+            return;
+
+        using (new EditorGUILayout.VerticalScope(EditorStyles.helpBox))
+        {
+            DrawTagHelp("!tmp", "Create a TextMeshProUGUI object instead of an Image.");
+            DrawTagHelp("!btn", "Add Button and set Transition to None.");
+            DrawTagHelp("!item", "Save this subtree as a separate item prefab.");
+            DrawTagHelp("!mask", "Add Mask.");
+            DrawTagHelp("!cg", "Add CanvasGroup.");
+            DrawTagHelp("!kr / !en / !jp", "Register language-specific layer entries.");
+            DrawTagHelp("!ref", "Skip this reference layer/tree during extraction and build.");
+            DrawTagHelp("!x1.5", "Override extraction scale for this layer image.");
+            EditorGUILayout.Space(3f);
+            EditorGUILayout.LabelField("Example", EditorStyles.boldLabel);
+            EditorGUILayout.LabelField("aa.psd + !item bb -> aa_bb_Item.prefab");
+        }
+    }
+
+    private static void DrawTagHelp(string tag, string description)
+    {
+        using (new EditorGUILayout.HorizontalScope())
+        {
+            EditorGUILayout.LabelField(tag, EditorStyles.boldLabel, GUILayout.Width(110f));
+            EditorGUILayout.LabelField(description);
+        }
     }
 
     private void DrawSettingsAssetField()
@@ -669,7 +712,9 @@ public sealed class GenericPsdUiImporter : EditorWindow
 
         languageEntries.Clear();
         textEntries.Clear();
+        itemPrefabEntries.Clear();
         BuildLayerTree(rootRect, layers, canvasW, canvasH);
+        SaveItemPrefabs(prefabName);
         ConfigureLanguageSwitcher(root);
         ConfigureTextLocalizer(root);
 
@@ -696,6 +741,7 @@ public sealed class GenericPsdUiImporter : EditorWindow
             string kind = layer["kind"]?.ToString() ?? "";
             bool isGroup = kind.Equals("group", StringComparison.OrdinalIgnoreCase);
             bool isTmp = convertTmpLayers && HasToken(layerName, "!tmp");
+            bool isItem = HasToken(layerName, "!item");
 
             var go = new GameObject(layerName, typeof(RectTransform));
             var rect = go.GetComponent<RectTransform>();
@@ -730,6 +776,16 @@ public sealed class GenericPsdUiImporter : EditorWindow
                 }
             }
 
+            ApplyLayerTagComponents(go, layerName);
+            if (isItem)
+            {
+                itemPrefabEntries.Add(new ItemPrefabEntry
+                {
+                    root = go,
+                    layerName = layerName,
+                });
+            }
+
             if (TryGetLanguage(layerName, out var language))
             {
                 languageEntries.Add(new PsdUiLanguageLayerSwitcher.Entry
@@ -739,6 +795,116 @@ public sealed class GenericPsdUiImporter : EditorWindow
                 });
             }
         }
+    }
+
+    private void ApplyLayerTagComponents(GameObject go, string layerName)
+    {
+        if (HasToken(layerName, "!btn"))
+        {
+            var button = go.GetComponent<Button>() ?? go.AddComponent<Button>();
+            button.transition = Selectable.Transition.None;
+            if (button.targetGraphic == null)
+                button.targetGraphic = go.GetComponent<Graphic>();
+            EditorUtility.SetDirty(button);
+        }
+
+        if (HasToken(layerName, "!mask"))
+        {
+            var mask = go.GetComponent<Mask>() ?? go.AddComponent<Mask>();
+            mask.showMaskGraphic = true;
+            EditorUtility.SetDirty(mask);
+        }
+
+        if (HasToken(layerName, "!cg"))
+        {
+            var canvasGroup = go.GetComponent<CanvasGroup>() ?? go.AddComponent<CanvasGroup>();
+            EditorUtility.SetDirty(canvasGroup);
+        }
+    }
+
+    private void SaveItemPrefabs(string sourcePrefabName)
+    {
+        if (itemPrefabEntries.Count == 0)
+            return;
+
+        string itemOutput = string.IsNullOrWhiteSpace(itemPrefabOutputDir) ? outputDir : itemPrefabOutputDir;
+        Directory.CreateDirectory(ToAbsolutePath(itemOutput));
+
+        foreach (var entry in itemPrefabEntries)
+        {
+            if (entry.root == null)
+                continue;
+
+            string itemName = CreateItemPrefabName(sourcePrefabName, entry.layerName);
+            string itemPath = $"{itemOutput.TrimEnd('/', '\\')}/{itemName}.prefab".Replace('\\', '/');
+            var itemClone = Instantiate(entry.root);
+            itemClone.name = itemName;
+            try
+            {
+                ConfigureItemPrefabComponents(itemClone);
+                PrefabUtility.SaveAsPrefabAsset(itemClone, itemPath);
+            }
+            finally
+            {
+                DestroyImmediate(itemClone);
+            }
+        }
+    }
+
+    private void ConfigureItemPrefabComponents(GameObject itemRoot)
+    {
+        if (addLanguageSwitcher)
+        {
+            var switcher = itemRoot.GetComponent<PsdUiLanguageLayerSwitcher>() ?? itemRoot.AddComponent<PsdUiLanguageLayerSwitcher>();
+            switcher.RebuildEntriesFromChildren(previewLanguage);
+            if (switcher.Entries.Count == 0)
+            {
+                DestroyImmediate(switcher);
+            }
+            else
+            {
+                EditorUtility.SetDirty(switcher);
+            }
+        }
+
+        if (!addTextLocalizer)
+            return;
+
+        Type localizerType = GetTextLocalizerType();
+        if (localizerType == null)
+            return;
+
+        var entries = new List<PsdUiTextLocalizerBase.Entry>();
+        foreach (var tmp in itemRoot.GetComponentsInChildren<TextMeshProUGUI>(true))
+        {
+            if (!HasToken(tmp.name, "!tmp"))
+                continue;
+
+            entries.Add(new PsdUiTextLocalizerBase.Entry
+            {
+                target = tmp,
+                key = CreateTextKey(tmp.name),
+                layerName = tmp.name,
+                language = TryGetLanguage(tmp.name, out var language) ? language : previewLanguage,
+            });
+        }
+
+        if (entries.Count == 0)
+            return;
+
+        var localizer = (PsdUiTextLocalizerBase)(itemRoot.GetComponent(localizerType) ?? itemRoot.AddComponent(localizerType));
+        localizer.SetEntries(entries.ToArray(), previewLanguage);
+        EditorUtility.SetDirty(localizer);
+    }
+
+    private static string CreateItemPrefabName(string sourcePrefabName, string layerName)
+    {
+        string cleanLayerName = StripKnownTags(layerName);
+        cleanLayerName = SanitizeAssetName(cleanLayerName);
+        if (string.IsNullOrWhiteSpace(cleanLayerName))
+            cleanLayerName = "Item";
+
+        return $"{SanitizeAssetName(sourcePrefabName)}_{cleanLayerName}_Item";
     }
 
     private void ConfigureLanguageSwitcher(GameObject root)
@@ -821,10 +987,20 @@ public sealed class GenericPsdUiImporter : EditorWindow
             return "";
 
         string key = layerName;
-        foreach (string token in new[] { "!tmp", "!kr", "!en", "!jp" })
-            key = RemoveToken(key, token);
+        key = StripKnownTags(key);
 
         return key.Trim();
+    }
+
+    private static string StripKnownTags(string value)
+    {
+        if (string.IsNullOrWhiteSpace(value))
+            return "";
+
+        foreach (string token in new[] { "!tmp", "!kr", "!en", "!jp", "!btn", "!item", "!mask", "!cg" })
+            value = RemoveToken(value, token);
+
+        return value.Trim();
     }
 
     private static string RemoveToken(string value, string token)
@@ -1157,6 +1333,7 @@ public sealed class GenericPsdUiImporter : EditorWindow
         CreateFolderIfPathIsRelative(metadataDir);
         CreateFolderIfPathIsRelative(spriteRootDir);
         CreateFolderIfPathIsRelative(outputDir);
+        CreateFolderIfPathIsRelative(itemPrefabOutputDir);
         CreateFolderIfPathIsRelative(spriteAtlasOutputDir);
 
         AssetDatabase.Refresh();
@@ -1355,6 +1532,9 @@ public sealed class GenericPsdUiImporter : EditorWindow
         metadataDir = settingsAsset.metadataDir;
         spriteRootDir = settingsAsset.spriteRootDir;
         outputDir = settingsAsset.outputDir;
+        itemPrefabOutputDir = string.IsNullOrWhiteSpace(settingsAsset.itemPrefabOutputDir)
+            ? "Assets/Resources/UI/Prefabs/Generated/Items"
+            : settingsAsset.itemPrefabOutputDir;
         exportScale = settingsAsset.exportScale;
         exportMaxDim = settingsAsset.exportMaxDim;
         exportPotSnap = settingsAsset.exportPotSnap;
@@ -1375,6 +1555,7 @@ public sealed class GenericPsdUiImporter : EditorWindow
             : settingsAsset.spriteAtlasOutputDir;
         createSpriteAtlasIfMissing = settingsAsset.createSpriteAtlasIfMissing;
         packSpriteAtlasAfterBuild = settingsAsset.packSpriteAtlasAfterBuild;
+        showTagReference = settingsAsset.showTagReference;
     }
 
     private void SavePrefs()
@@ -1387,6 +1568,7 @@ public sealed class GenericPsdUiImporter : EditorWindow
         settingsAsset.metadataDir = metadataDir;
         settingsAsset.spriteRootDir = spriteRootDir;
         settingsAsset.outputDir = outputDir;
+        settingsAsset.itemPrefabOutputDir = itemPrefabOutputDir;
         settingsAsset.exportScale = exportScale;
         settingsAsset.exportMaxDim = exportMaxDim;
         settingsAsset.exportPotSnap = exportPotSnap;
@@ -1405,6 +1587,7 @@ public sealed class GenericPsdUiImporter : EditorWindow
         settingsAsset.spriteAtlasOutputDir = spriteAtlasOutputDir;
         settingsAsset.createSpriteAtlasIfMissing = createSpriteAtlasIfMissing;
         settingsAsset.packSpriteAtlasAfterBuild = packSpriteAtlasAfterBuild;
+        settingsAsset.showTagReference = showTagReference;
 
         EditorUtility.SetDirty(settingsAsset);
         AssetDatabase.SaveAssets();
@@ -1453,6 +1636,7 @@ public sealed class GenericPsdUiImporterSettings : ScriptableObject
     public string metadataDir = "Assets/Art/Extracted";
     public string spriteRootDir = "Assets/Art/Extracted";
     public string outputDir = "Assets/Resources/UI/Prefabs/Generated";
+    public string itemPrefabOutputDir = "Assets/Resources/UI/Prefabs/Generated/Items";
     public float exportScale = 1f;
     public int exportMaxDim;
     public bool exportPotSnap;
@@ -1471,5 +1655,6 @@ public sealed class GenericPsdUiImporterSettings : ScriptableObject
     public string spriteAtlasOutputDir = "Assets/Art/Extracted/Atlases";
     public bool createSpriteAtlasIfMissing = true;
     public bool packSpriteAtlasAfterBuild;
+    public bool showTagReference;
 }
 #endif

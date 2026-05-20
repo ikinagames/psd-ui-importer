@@ -1,4 +1,4 @@
-﻿# PSD UI Importer
+# PSD UI Importer
 
 Generic Unity editor package that extracts PSD/PSB files into PNG + JSON metadata and builds Unity UI prefabs from those exports.
 
@@ -42,6 +42,11 @@ The bundled extractor creates JSON files with `source`, `canvas`, and recursive 
 
 If your project already has another PSD export pipeline, you can skip the extract step and point the importer at compatible JSON + PNG outputs.
 
+
+## Project Settings Asset
+
+The importer stores paths and build options in `Assets/Editor/PsdUiImporterSettings.asset`. Commit this asset to share the same PSD source folder, extraction output folder, prefab output folder, and import options with the team.
+
 ## Layer Tags
 
 - `!tmp`: creates a TextMeshProUGUI object instead of an Image.
@@ -56,3 +61,4 @@ Language-tagged layers are controlled by `PsdUiLanguageLayerSwitcher` on the gen
 ## Cleanup Images
 
 The same editor window has a `Cleanup Images` tab. It scans Texture2D assets in a selected folder and lists images that are not referenced by prefabs or scenes. Use it after regenerating PSD layer PNGs to find stale extracted images.
+

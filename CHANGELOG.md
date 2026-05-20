@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.1.2
+
+- Store Generic PSD UI Importer paths and options in a project settings asset at `Assets/Editor/PsdUiImporterSettings.asset`.
+
 ## 0.1.1
 
 - Renamed package technical name to `com.ikinagames.psd-ui-importer`.
@@ -12,4 +16,6 @@
 - Added TMP and language layer tags.
 - Added Cleanup Images tab for orphaned PSD-generated textures.
 - Added bundled `extract_psd.py` and editor controls for PSD/PSB extraction.
+
+
 

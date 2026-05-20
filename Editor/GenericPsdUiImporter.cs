@@ -1,4 +1,4 @@
-﻿#if UNITY_EDITOR
+#if UNITY_EDITOR
 using System;
 using System.Collections.Generic;
 using System.Globalization;
@@ -18,19 +18,11 @@ using UnityEngine.UI;
 /// </summary>
 public sealed class GenericPsdUiImporter : EditorWindow
 {
-    private const string PrefPsdSourceDir = "GenericPsdUiImporter.PsdSourceDir";
-    private const string PrefMetadataDir = "GenericPsdUiImporter.MetadataDir";
-    private const string PrefSpriteRootDir = "GenericPsdUiImporter.SpriteRootDir";
-    private const string PrefOutputDir = "GenericPsdUiImporter.OutputDir";
-    private const string PrefExportScale = "GenericPsdUiImporter.ExportScale";
-    private const string PrefExportMaxDim = "GenericPsdUiImporter.ExportMaxDim";
-    private const string PrefExportPotSnap = "GenericPsdUiImporter.ExportPotSnap";
-    private const string PrefExportPotThreshold = "GenericPsdUiImporter.ExportPotThreshold";
-    private const string PrefExportForceTopil = "GenericPsdUiImporter.ExportForceTopil";
-    private const string PrefExportSnapAlpha = "GenericPsdUiImporter.ExportSnapAlpha";
+    private const string SettingsAssetPath = "Assets/Editor/PsdUiImporterSettings.asset";
 
     private static readonly string[] SkipLayerPrefixes = { "!ref" };
 
+    [SerializeField] private GenericPsdUiImporterSettings settingsAsset;
     [SerializeField] private string psdSourceDir = "Assets/Art/PSD";
     [SerializeField] private string metadataDir = "Assets/Art/Extracted";
     [SerializeField] private string spriteRootDir = "Assets/Art/Extracted";
@@ -103,6 +95,17 @@ public sealed class GenericPsdUiImporter : EditorWindow
         EditorGUILayout.HelpBox(
             "Extract PSD/PSB files into JSON + PNG files, then build UI prefabs from those exports. Project-specific importers can be built on top of this generic workflow.",
             MessageType.Info);
+
+        using (var change = new EditorGUI.ChangeCheckScope())
+        {
+            var pickedSettings = (GenericPsdUiImporterSettings)EditorGUILayout.ObjectField("Settings Asset", settingsAsset, typeof(GenericPsdUiImporterSettings), false);
+            if (change.changed && pickedSettings != null)
+            {
+                settingsAsset = pickedSettings;
+                LoadPrefs();
+                RefreshJsonList();
+            }
+        }
 
         EditorGUILayout.LabelField("PSD Extract", EditorStyles.boldLabel);
         DrawPathField("Source PSD Folder", ref psdSourceDir, true);
@@ -740,30 +743,71 @@ public sealed class GenericPsdUiImporter : EditorWindow
 
     private void LoadPrefs()
     {
-        psdSourceDir = EditorPrefs.GetString(PrefPsdSourceDir, psdSourceDir);
-        metadataDir = EditorPrefs.GetString(PrefMetadataDir, metadataDir);
-        spriteRootDir = EditorPrefs.GetString(PrefSpriteRootDir, spriteRootDir);
-        outputDir = EditorPrefs.GetString(PrefOutputDir, outputDir);
-        exportScale = EditorPrefs.GetFloat(PrefExportScale, exportScale);
-        exportMaxDim = EditorPrefs.GetInt(PrefExportMaxDim, exportMaxDim);
-        exportPotSnap = EditorPrefs.GetBool(PrefExportPotSnap, exportPotSnap);
-        exportPotThreshold = EditorPrefs.GetFloat(PrefExportPotThreshold, exportPotThreshold);
-        exportForceTopil = EditorPrefs.GetBool(PrefExportForceTopil, exportForceTopil);
-        exportSnapAlpha = EditorPrefs.GetInt(PrefExportSnapAlpha, exportSnapAlpha);
+        settingsAsset = settingsAsset != null ? settingsAsset : LoadOrCreateSettingsAsset();
+        if (settingsAsset == null)
+            return;
+
+        psdSourceDir = settingsAsset.psdSourceDir;
+        metadataDir = settingsAsset.metadataDir;
+        spriteRootDir = settingsAsset.spriteRootDir;
+        outputDir = settingsAsset.outputDir;
+        exportScale = settingsAsset.exportScale;
+        exportMaxDim = settingsAsset.exportMaxDim;
+        exportPotSnap = settingsAsset.exportPotSnap;
+        exportPotThreshold = settingsAsset.exportPotThreshold;
+        exportForceTopil = settingsAsset.exportForceTopil;
+        exportSnapAlpha = settingsAsset.exportSnapAlpha;
+        replaceExistingContent = settingsAsset.replaceExistingContent;
+        prepareSprites = settingsAsset.prepareSprites;
+        convertTmpLayers = settingsAsset.convertTmpLayers;
+        addLanguageSwitcher = settingsAsset.addLanguageSwitcher;
+        previewLanguage = settingsAsset.previewLanguage;
+        defaultFont = settingsAsset.defaultFont;
     }
 
     private void SavePrefs()
     {
-        EditorPrefs.SetString(PrefPsdSourceDir, psdSourceDir);
-        EditorPrefs.SetString(PrefMetadataDir, metadataDir);
-        EditorPrefs.SetString(PrefSpriteRootDir, spriteRootDir);
-        EditorPrefs.SetString(PrefOutputDir, outputDir);
-        EditorPrefs.SetFloat(PrefExportScale, exportScale);
-        EditorPrefs.SetInt(PrefExportMaxDim, exportMaxDim);
-        EditorPrefs.SetBool(PrefExportPotSnap, exportPotSnap);
-        EditorPrefs.SetFloat(PrefExportPotThreshold, exportPotThreshold);
-        EditorPrefs.SetBool(PrefExportForceTopil, exportForceTopil);
-        EditorPrefs.SetInt(PrefExportSnapAlpha, exportSnapAlpha);
+        settingsAsset = settingsAsset != null ? settingsAsset : LoadOrCreateSettingsAsset();
+        if (settingsAsset == null)
+            return;
+
+        settingsAsset.psdSourceDir = psdSourceDir;
+        settingsAsset.metadataDir = metadataDir;
+        settingsAsset.spriteRootDir = spriteRootDir;
+        settingsAsset.outputDir = outputDir;
+        settingsAsset.exportScale = exportScale;
+        settingsAsset.exportMaxDim = exportMaxDim;
+        settingsAsset.exportPotSnap = exportPotSnap;
+        settingsAsset.exportPotThreshold = exportPotThreshold;
+        settingsAsset.exportForceTopil = exportForceTopil;
+        settingsAsset.exportSnapAlpha = exportSnapAlpha;
+        settingsAsset.replaceExistingContent = replaceExistingContent;
+        settingsAsset.prepareSprites = prepareSprites;
+        settingsAsset.convertTmpLayers = convertTmpLayers;
+        settingsAsset.addLanguageSwitcher = addLanguageSwitcher;
+        settingsAsset.previewLanguage = previewLanguage;
+        settingsAsset.defaultFont = defaultFont;
+
+        EditorUtility.SetDirty(settingsAsset);
+        AssetDatabase.SaveAssets();
+    }
+
+    private static GenericPsdUiImporterSettings LoadOrCreateSettingsAsset()
+    {
+        var asset = AssetDatabase.LoadAssetAtPath<GenericPsdUiImporterSettings>(SettingsAssetPath);
+        if (asset != null)
+            return asset;
+
+        string directory = Path.GetDirectoryName(SettingsAssetPath)?.Replace('\\', '/');
+        if (!string.IsNullOrEmpty(directory))
+            Directory.CreateDirectory(ToAbsolutePath(directory));
+
+        asset = CreateInstance<GenericPsdUiImporterSettings>();
+        AssetDatabase.CreateAsset(asset, SettingsAssetPath);
+        AssetDatabase.SaveAssets();
+        AssetDatabase.Refresh();
+        Debug.Log($"[GenericPsdUiImporter] Created project settings asset: {SettingsAssetPath}");
+        return asset;
     }
 
     private static string ToAbsolutePath(string assetPath)
@@ -784,11 +828,24 @@ public sealed class GenericPsdUiImporter : EditorWindow
         return absolutePath;
     }
 }
+
+public sealed class GenericPsdUiImporterSettings : ScriptableObject
+{
+    public string psdSourceDir = "Assets/Art/PSD";
+    public string metadataDir = "Assets/Art/Extracted";
+    public string spriteRootDir = "Assets/Art/Extracted";
+    public string outputDir = "Assets/Resources/UI/Prefabs/Generated";
+    public float exportScale = 1f;
+    public int exportMaxDim;
+    public bool exportPotSnap;
+    public float exportPotThreshold = 1.05f;
+    public bool exportForceTopil;
+    public int exportSnapAlpha = -1;
+    public bool replaceExistingContent = true;
+    public bool prepareSprites = true;
+    public bool convertTmpLayers = true;
+    public bool addLanguageSwitcher = true;
+    public SystemLanguage previewLanguage = SystemLanguage.Korean;
+    public TMP_FontAsset defaultFont;
+}
 #endif
-
-
-
-
-
-
-

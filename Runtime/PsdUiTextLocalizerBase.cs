@@ -63,6 +63,15 @@ public abstract class PsdUiTextLocalizerBase : MonoBehaviour
         {
             SystemLanguage.Korean => SystemLanguage.Korean,
             SystemLanguage.Japanese => SystemLanguage.Japanese,
+            SystemLanguage.Chinese => SystemLanguage.Chinese,
+            SystemLanguage.ChineseSimplified => SystemLanguage.ChineseSimplified,
+            SystemLanguage.ChineseTraditional => SystemLanguage.ChineseTraditional,
+            SystemLanguage.French => SystemLanguage.French,
+            SystemLanguage.German => SystemLanguage.German,
+            SystemLanguage.Spanish => SystemLanguage.Spanish,
+            SystemLanguage.Italian => SystemLanguage.Italian,
+            SystemLanguage.Portuguese => SystemLanguage.Portuguese,
+            SystemLanguage.Russian => SystemLanguage.Russian,
             _ => SystemLanguage.English,
         };
     }

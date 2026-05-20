@@ -51,6 +51,7 @@ public sealed class GenericPsdUiImporter : EditorWindow
     [SerializeField] private GameObject auditPrefab;
     [SerializeField] private bool auditIncludeFolderTextures = true;
     [SerializeField] private bool auditShowUsage = true;
+    [SerializeField] private bool auditShowWarnings = true;
     [SerializeField] private bool auditShowImportSettings = true;
     [SerializeField] private bool auditShowPlatformSettings;
     [SerializeField] private bool auditShowAtlas = true;
@@ -65,6 +66,7 @@ public sealed class GenericPsdUiImporter : EditorWindow
     private string statusMessage = "";
     private int spriteCount;
     private int missingSpriteCount;
+    private int itemPrefabCount;
     private int activeTab;
     private readonly PsdOrphanedImageCleanerPanel orphanedImageCleaner = new();
 
@@ -85,6 +87,7 @@ public sealed class GenericPsdUiImporter : EditorWindow
         public Texture2D texture;
         public Sprite sprite;
         public bool inConfiguredAtlas;
+        public List<string> warnings = new();
     }
 
     private sealed class ItemPrefabEntry
@@ -145,6 +148,9 @@ public sealed class GenericPsdUiImporter : EditorWindow
                 if (ExtractPsdFiles())
                     BuildSelected();
             }
+
+            if (GUILayout.Button("변경 PSD 추출 + 생성", GUILayout.Height(32f)))
+                ExtractChangedPsdFilesAndBuild();
         }
 
         using (new EditorGUILayout.HorizontalScope())
@@ -154,9 +160,6 @@ public sealed class GenericPsdUiImporter : EditorWindow
 
             if (GUILayout.Button("PSD 추출", GUILayout.Height(26f)))
                 ExtractPsdFiles();
-
-            if (GUILayout.Button("변경 PSD 추출 + 생성", GUILayout.Height(26f)))
-                ExtractChangedPsdFilesAndBuild();
 
             using (new EditorGUI.DisabledScope(!useSpriteAtlas))
             {
@@ -203,7 +206,7 @@ public sealed class GenericPsdUiImporter : EditorWindow
         replaceExistingContent = EditorGUILayout.ToggleLeft("기존 프리팹의 생성 자식 교체", replaceExistingContent);
         prepareSprites = EditorGUILayout.ToggleLeft("PNG를 UI Sprite 설정으로 준비", prepareSprites);
         convertTmpLayers = EditorGUILayout.ToggleLeft("!tmp 레이어를 TextMeshProUGUI로 변환", convertTmpLayers);
-        addLanguageSwitcher = EditorGUILayout.ToggleLeft("!kr / !en / !jp 언어 전환 컴포넌트 추가", addLanguageSwitcher);
+        addLanguageSwitcher = EditorGUILayout.ToggleLeft("언어 태그 전환 컴포넌트 추가", addLanguageSwitcher);
         addTextLocalizer = EditorGUILayout.ToggleLeft("!tmp 레이어용 프로젝트 텍스트 로컬라이저 추가", addTextLocalizer);
         using (new EditorGUI.DisabledScope(!addTextLocalizer))
             textLocalizerScript = (MonoScript)EditorGUILayout.ObjectField("텍스트 로컬라이저 스크립트", textLocalizerScript, typeof(MonoScript), false);
@@ -228,6 +231,9 @@ public sealed class GenericPsdUiImporter : EditorWindow
 
             if (GUILayout.Button("폴더 생성", GUILayout.Height(28f)))
                 CreateConfiguredFolders();
+
+            if (GUILayout.Button("PSD 변경 기록 초기화", GUILayout.Height(28f)))
+                ResetPsdFileStates();
 
             using (new EditorGUI.DisabledScope(!useSpriteAtlas))
             {
@@ -254,7 +260,9 @@ public sealed class GenericPsdUiImporter : EditorWindow
             DrawTagHelp("!item", "하위 루트를 별도 아이템 프리팹으로 저장");
             DrawTagHelp("!mask", "Mask 추가");
             DrawTagHelp("!cg", "CanvasGroup 추가");
-            DrawTagHelp("!kr / !en / !jp", "언어별 레이어 엔트리 등록");
+            DrawTagHelp("!kr/!ko !en !jp/!ja", "한국어/영어/일본어 레이어 엔트리 등록");
+            DrawTagHelp("!zh !zhs !zht", "중국어/간체/번체 레이어 엔트리 등록");
+            DrawTagHelp("!fr !de !es !it !pt !ru", "추가 언어 레이어 엔트리 등록");
             DrawTagHelp("!ref", "참고용 레이어/트리는 추출 및 생성에서 제외");
             DrawTagHelp("!x1.5", "해당 레이어 이미지 추출 스케일 override");
             EditorGUILayout.Space(3f);
@@ -297,26 +305,39 @@ public sealed class GenericPsdUiImporter : EditorWindow
 
     private void DrawTextureAuditTab()
     {
-        EditorGUILayout.LabelField("Texture Audit", EditorStyles.boldLabel);
-        auditPrefab = (GameObject)EditorGUILayout.ObjectField("Prefab", auditPrefab, typeof(GameObject), false);
-        auditIncludeFolderTextures = EditorGUILayout.ToggleLeft("Include textures in matching PSD folder", auditIncludeFolderTextures);
+        EditorGUILayout.LabelField("텍스처 검사", EditorStyles.boldLabel);
+        auditPrefab = (GameObject)EditorGUILayout.ObjectField("프리팹", auditPrefab, typeof(GameObject), false);
+        auditIncludeFolderTextures = EditorGUILayout.ToggleLeft("같은 PSD 폴더의 텍스처도 포함", auditIncludeFolderTextures);
 
         using (new EditorGUILayout.HorizontalScope())
         {
-            if (GUILayout.Button("Use Selected Prefab", GUILayout.Height(26f)))
-                auditPrefab = Selection.activeObject as GameObject;
+            if (GUILayout.Button("선택 프리팹 검사", GUILayout.Height(26f)))
+                UseSelectedPrefabAndRefreshAudit();
 
-            if (GUILayout.Button("Refresh", GUILayout.Height(26f)))
+            if (GUILayout.Button("새로고침", GUILayout.Height(26f)))
                 RefreshTextureAudit();
+
+            using (new EditorGUI.DisabledScope(textureAuditRows.Count == 0))
+            {
+                if (GUILayout.Button("권장 설정 적용", GUILayout.Height(26f)))
+                    ApplyRecommendedTextureSettings();
+            }
+
+            using (new EditorGUI.DisabledScope(!useSpriteAtlas || auditPrefab == null))
+            {
+                if (GUILayout.Button("Atlas 누락 추가", GUILayout.Height(26f)))
+                    AddAuditPrefabToAtlas();
+            }
         }
 
         EditorGUILayout.Space(6f);
-        EditorGUILayout.LabelField("Columns", EditorStyles.boldLabel);
+        EditorGUILayout.LabelField("컬럼", EditorStyles.boldLabel);
         using (new EditorGUILayout.HorizontalScope())
         {
-            auditShowUsage = EditorGUILayout.ToggleLeft("Usage", auditShowUsage, GUILayout.Width(80f));
+            auditShowUsage = EditorGUILayout.ToggleLeft("사용처", auditShowUsage, GUILayout.Width(80f));
+            auditShowWarnings = EditorGUILayout.ToggleLeft("경고", auditShowWarnings, GUILayout.Width(80f));
             auditShowImportSettings = EditorGUILayout.ToggleLeft("Import", auditShowImportSettings, GUILayout.Width(80f));
-            auditShowPlatformSettings = EditorGUILayout.ToggleLeft("Platform", auditShowPlatformSettings, GUILayout.Width(90f));
+            auditShowPlatformSettings = EditorGUILayout.ToggleLeft("플랫폼", auditShowPlatformSettings, GUILayout.Width(90f));
             auditShowAtlas = EditorGUILayout.ToggleLeft("Atlas", auditShowAtlas, GUILayout.Width(80f));
         }
 
@@ -329,18 +350,19 @@ public sealed class GenericPsdUiImporter : EditorWindow
     {
         if (textureAuditRows.Count == 0)
         {
-            EditorGUILayout.HelpBox("No texture audit data. Select a generated prefab and click Refresh.", MessageType.Info);
+            EditorGUILayout.HelpBox("검사 데이터가 없습니다. 생성된 프리팹을 선택하고 새로고침하세요.", MessageType.Info);
             return;
         }
 
         using (new EditorGUILayout.HorizontalScope(EditorStyles.toolbar))
         {
-            GUILayout.Label("Texture", GUILayout.Width(180f));
-            GUILayout.Label("Size", GUILayout.Width(80f));
-            GUILayout.Label("Path", GUILayout.Width(280f));
-            if (auditShowUsage) GUILayout.Label("Usage", GUILayout.Width(170f));
-            if (auditShowImportSettings) GUILayout.Label("Import Settings", GUILayout.Width(320f));
-            if (auditShowPlatformSettings) GUILayout.Label("Platforms", GUILayout.Width(300f));
+            GUILayout.Label("텍스처", GUILayout.Width(180f));
+            GUILayout.Label("크기", GUILayout.Width(80f));
+            GUILayout.Label("경로", GUILayout.Width(280f));
+            if (auditShowUsage) GUILayout.Label("사용처", GUILayout.Width(170f));
+            if (auditShowWarnings) GUILayout.Label("경고", GUILayout.Width(250f));
+            if (auditShowImportSettings) GUILayout.Label("Import 설정", GUILayout.Width(320f));
+            if (auditShowPlatformSettings) GUILayout.Label("플랫폼", GUILayout.Width(300f));
             if (auditShowAtlas) GUILayout.Label("Atlas", GUILayout.Width(90f));
             GUILayout.Label("", GUILayout.Width(150f));
         }
@@ -353,20 +375,35 @@ public sealed class GenericPsdUiImporter : EditorWindow
                 GUILayout.Label(row.texture != null ? $"{row.texture.width}x{row.texture.height}" : "-", GUILayout.Width(80f));
                 GUILayout.Label(row.path, GUILayout.Width(280f));
                 if (auditShowUsage)
-                    GUILayout.Label(row.usedByPrefab ? row.usage : "Folder only", GUILayout.Width(170f));
+                    GUILayout.Label(row.usedByPrefab ? row.usage : "폴더만", GUILayout.Width(170f));
+                if (auditShowWarnings)
+                    GUILayout.Label(row.warnings.Count > 0 ? string.Join(", ", row.warnings) : "-", GUILayout.Width(250f));
                 if (auditShowImportSettings)
                     GUILayout.Label(GetImportSettingsSummary(row.importer), GUILayout.Width(320f));
                 if (auditShowPlatformSettings)
                     GUILayout.Label(GetPlatformSettingsSummary(row.importer), GUILayout.Width(300f));
                 if (auditShowAtlas)
-                    GUILayout.Label(row.inConfiguredAtlas ? "Configured" : "-", GUILayout.Width(90f));
+                    GUILayout.Label(row.inConfiguredAtlas ? "등록됨" : "-", GUILayout.Width(90f));
 
-                if (GUILayout.Button("Select", GUILayout.Width(60f)))
+                if (GUILayout.Button("선택", GUILayout.Width(60f)))
                     SelectAuditAsset(row);
-                if (GUILayout.Button("Folder", GUILayout.Width(60f)))
+                if (GUILayout.Button("폴더", GUILayout.Width(60f)))
                     SelectAuditFolder(row);
             }
         }
+    }
+
+    private void UseSelectedPrefabAndRefreshAudit()
+    {
+        var selected = Selection.activeObject as GameObject;
+        if (selected == null || string.IsNullOrEmpty(AssetDatabase.GetAssetPath(selected)) || PrefabUtility.GetPrefabAssetType(selected) == PrefabAssetType.NotAPrefab)
+        {
+            statusMessage = "Project 창에서 프리팹 에셋을 선택하세요.";
+            return;
+        }
+
+        auditPrefab = selected;
+        RefreshTextureAudit();
     }
 
     private static void SelectAuditAsset(TextureAuditRow row)
@@ -401,14 +438,14 @@ public sealed class GenericPsdUiImporter : EditorWindow
         textureAuditRows.Clear();
         if (auditPrefab == null)
         {
-            statusMessage = "Select a prefab to audit.";
+            statusMessage = "검사할 프리팹을 선택하세요.";
             return;
         }
 
         string prefabPath = AssetDatabase.GetAssetPath(auditPrefab);
         if (string.IsNullOrEmpty(prefabPath))
         {
-            statusMessage = "Texture Audit requires a prefab asset.";
+            statusMessage = "텍스처 검사는 프리팹 에셋이 필요합니다.";
             return;
         }
 
@@ -439,7 +476,9 @@ public sealed class GenericPsdUiImporter : EditorWindow
             AddMatchingFolderTextures(byPath, Path.GetFileNameWithoutExtension(prefabPath));
 
         textureAuditRows.AddRange(byPath.Values.OrderBy(row => row.path));
-        statusMessage = $"Texture Audit: {textureAuditRows.Count} texture(s).";
+        foreach (var row in textureAuditRows)
+            row.warnings = GetTextureWarnings(row);
+        statusMessage = $"텍스처 검사: {textureAuditRows.Count}개";
     }
 
     private void AddMatchingFolderTextures(Dictionary<string, TextureAuditRow> byPath, string prefabName)
@@ -481,6 +520,96 @@ public sealed class GenericPsdUiImporter : EditorWindow
             row.sprite = sprite;
         if (!string.IsNullOrEmpty(usage))
             row.usage = string.IsNullOrEmpty(row.usage) ? usage : $"{row.usage}, {usage}";
+    }
+
+    private List<string> GetTextureWarnings(TextureAuditRow row)
+    {
+        var warnings = new List<string>();
+        if (row.importer == null)
+        {
+            warnings.Add("Importer 없음");
+            return warnings;
+        }
+
+        if (row.importer.textureType != TextureImporterType.Sprite)
+            warnings.Add("Sprite 아님");
+        if (row.importer.spriteImportMode != SpriteImportMode.Single)
+            warnings.Add("Single 아님");
+        if (row.importer.mipmapEnabled)
+            warnings.Add("Mipmap 켜짐");
+        if (!row.importer.alphaIsTransparency)
+            warnings.Add("Alpha 투명 꺼짐");
+        if (useSpriteAtlas && row.usedByPrefab && !row.inConfiguredAtlas)
+            warnings.Add("Atlas 미등록");
+
+        return warnings;
+    }
+
+    private void ApplyRecommendedTextureSettings()
+    {
+        int changed = 0;
+        foreach (var row in textureAuditRows)
+        {
+            if (row.importer == null)
+                continue;
+
+            bool dirty = false;
+            if (row.importer.textureType != TextureImporterType.Sprite)
+            {
+                row.importer.textureType = TextureImporterType.Sprite;
+                dirty = true;
+            }
+
+            if (row.importer.spriteImportMode != SpriteImportMode.Single)
+            {
+                row.importer.spriteImportMode = SpriteImportMode.Single;
+                dirty = true;
+            }
+
+            if (row.importer.mipmapEnabled)
+            {
+                row.importer.mipmapEnabled = false;
+                dirty = true;
+            }
+
+            if (!row.importer.alphaIsTransparency)
+            {
+                row.importer.alphaIsTransparency = true;
+                dirty = true;
+            }
+
+            if (!dirty)
+                continue;
+
+            row.importer.SaveAndReimport();
+            changed++;
+        }
+
+        AssetDatabase.Refresh();
+        RefreshTextureAudit();
+        statusMessage = $"권장 텍스처 설정 적용: {changed}개";
+    }
+
+    private void AddAuditPrefabToAtlas()
+    {
+        if (auditPrefab == null)
+        {
+            statusMessage = "검사할 프리팹을 선택하세요.";
+            return;
+        }
+
+        string jsonPath = $"{metadataDir.TrimEnd('/', '\\')}/{auditPrefab.name}.json".Replace('\\', '/');
+        if (!File.Exists(ToAbsolutePath(jsonPath)))
+        {
+            statusMessage = $"대응 JSON을 찾을 수 없습니다: {jsonPath}";
+            return;
+        }
+
+        string updated = UpdateSpriteAtlasForJson(jsonPath);
+        RefreshTextureAudit();
+        statusMessage = string.IsNullOrEmpty(updated)
+            ? "아틀라스에 추가할 항목이 없습니다."
+            : $"아틀라스 갱신: {updated}";
     }
 
     private bool IsInConfiguredAtlas(string texturePath)
@@ -540,7 +669,7 @@ public sealed class GenericPsdUiImporter : EditorWindow
     private static string GetPlatformSummary(TextureImporter importer, string platform)
     {
         var settings = importer.GetPlatformTextureSettings(platform);
-        if (settings == null || !settings.overridden)
+        if (!settings.overridden)
             return $"{platform}: default";
 
         return $"{platform}: {settings.maxTextureSize}/{settings.format}";
@@ -655,6 +784,7 @@ public sealed class GenericPsdUiImporter : EditorWindow
         int built = 0;
         spriteCount = 0;
         missingSpriteCount = 0;
+        itemPrefabCount = 0;
         var buildEntries = entries.ToList();
 
         foreach (var entry in buildEntries)
@@ -684,9 +814,9 @@ public sealed class GenericPsdUiImporter : EditorWindow
             }
         }
 
-        statusMessage = $"Built {built} UI prefab(s). Sprites {spriteCount}, missing {missingSpriteCount}. Output: {outputDir}";
+        statusMessage = $"UI 프리팹 {built}개 생성. Sprite {spriteCount}개, 누락 {missingSpriteCount}개, Item {itemPrefabCount}개. 출력: {outputDir}";
         if (updatedAtlases.Count > 0)
-            statusMessage += $"\nUpdated atlas: {string.Join(", ", updatedAtlases)}";
+            statusMessage += $"\n아틀라스 갱신: {string.Join(", ", updatedAtlases)}";
         Debug.Log($"[GenericPsdUiImporter] {statusMessage}");
     }
 
@@ -858,6 +988,7 @@ public sealed class GenericPsdUiImporter : EditorWindow
             {
                 ConfigureItemPrefabComponents(itemClone);
                 PrefabUtility.SaveAsPrefabAsset(itemClone, itemPath);
+                itemPrefabCount++;
             }
             finally
             {
@@ -1012,7 +1143,7 @@ public sealed class GenericPsdUiImporter : EditorWindow
         if (string.IsNullOrWhiteSpace(value))
             return "";
 
-        foreach (string token in new[] { "!tmp", "!kr", "!en", "!jp", "!btn", "!item", "!mask", "!cg" })
+        foreach (string token in KnownTags)
             value = RemoveToken(value, token);
 
         return value.Trim();
@@ -1107,27 +1238,46 @@ public sealed class GenericPsdUiImporter : EditorWindow
 
     private static bool TryGetLanguage(string name, out SystemLanguage language)
     {
-        if (HasToken(name, "!kr"))
+        foreach (var pair in LanguageTags)
         {
-            language = SystemLanguage.Korean;
-            return true;
-        }
+            if (!HasToken(name, pair.token))
+                continue;
 
-        if (HasToken(name, "!jp"))
-        {
-            language = SystemLanguage.Japanese;
-            return true;
-        }
-
-        if (HasToken(name, "!en"))
-        {
-            language = SystemLanguage.English;
+            language = pair.language;
             return true;
         }
 
         language = SystemLanguage.Unknown;
         return false;
     }
+
+    private static readonly (string token, SystemLanguage language)[] LanguageTags =
+    {
+        ("!kr", SystemLanguage.Korean),
+        ("!ko", SystemLanguage.Korean),
+        ("!jp", SystemLanguage.Japanese),
+        ("!ja", SystemLanguage.Japanese),
+        ("!en", SystemLanguage.English),
+        ("!zh-cn", SystemLanguage.ChineseSimplified),
+        ("!zh-tw", SystemLanguage.ChineseTraditional),
+        ("!zhs", SystemLanguage.ChineseSimplified),
+        ("!zht", SystemLanguage.ChineseTraditional),
+        ("!zh", SystemLanguage.Chinese),
+        ("!fr", SystemLanguage.French),
+        ("!de", SystemLanguage.German),
+        ("!es", SystemLanguage.Spanish),
+        ("!it", SystemLanguage.Italian),
+        ("!pt", SystemLanguage.Portuguese),
+        ("!ru", SystemLanguage.Russian),
+    };
+
+    private static readonly string[] KnownTags =
+    {
+        "!tmp", "!btn", "!item", "!mask", "!cg",
+        "!kr", "!ko", "!en", "!jp", "!ja",
+        "!zh-cn", "!zh-tw", "!zhs", "!zht", "!zh",
+        "!fr", "!de", "!es", "!it", "!pt", "!ru",
+    };
 
     private static bool HasToken(string name, string token)
     {
@@ -1196,8 +1346,8 @@ public sealed class GenericPsdUiImporter : EditorWindow
         }
 
         statusMessage = updatedAtlases.Count > 0
-            ? $"Updated atlas: {string.Join(", ", updatedAtlases)}"
-            : "No selected JSON files to update atlas.";
+            ? $"아틀라스 갱신: {string.Join(", ", updatedAtlases)}"
+            : "아틀라스를 갱신할 선택 JSON이 없습니다.";
     }
 
     private string UpdateSpriteAtlasForJson(string jsonAssetPath)
@@ -1206,13 +1356,13 @@ public sealed class GenericPsdUiImporter : EditorWindow
 
         if (!useSpriteAtlas)
         {
-            statusMessage = "Sprite Atlas is disabled.";
+            statusMessage = "스프라이트 아틀라스가 꺼져 있습니다.";
             return null;
         }
 
         if (string.IsNullOrWhiteSpace(spriteAtlasOutputDir))
         {
-            statusMessage = "Sprite Atlas output folder is empty.";
+            statusMessage = "스프라이트 아틀라스 출력 폴더가 비어 있습니다.";
             return null;
         }
 
@@ -1226,7 +1376,7 @@ public sealed class GenericPsdUiImporter : EditorWindow
         {
             if (!createSpriteAtlasIfMissing)
             {
-                statusMessage = $"Sprite Atlas not found: {atlasPath}";
+                statusMessage = $"스프라이트 아틀라스를 찾을 수 없습니다: {atlasPath}";
                 return null;
             }
 
@@ -1240,7 +1390,7 @@ public sealed class GenericPsdUiImporter : EditorWindow
         var newPackables = CollectAtlasPackables(meta, jsonAssetPath, packables, out bool foundPackables);
         if (!foundPackables)
         {
-            statusMessage = $"No sprite packables found for atlas: {atlasName}";
+            statusMessage = $"아틀라스에 추가할 스프라이트를 찾을 수 없습니다: {atlasName}";
             return null;
         }
 
@@ -1254,7 +1404,7 @@ public sealed class GenericPsdUiImporter : EditorWindow
         if (packSpriteAtlasAfterBuild)
             SpriteAtlasUtility.PackAtlases(new[] { atlas }, EditorUserBuildSettings.activeBuildTarget, false);
 
-        statusMessage = $"Updated Sprite Atlas: {atlasPath}";
+        statusMessage = $"스프라이트 아틀라스 갱신: {atlasPath}";
         return atlasPath;
     }
 
@@ -1337,7 +1487,7 @@ public sealed class GenericPsdUiImporter : EditorWindow
     {
         SavePrefs();
         string path = AssetDatabase.GetAssetPath(settingsAsset);
-        statusMessage = $"Saved settings: {(string.IsNullOrEmpty(path) ? SettingsAssetPath : path)}";
+        statusMessage = $"설정 저장: {(string.IsNullOrEmpty(path) ? SettingsAssetPath : path)}";
     }
 
     private void CreateConfiguredFolders()
@@ -1352,7 +1502,16 @@ public sealed class GenericPsdUiImporter : EditorWindow
         CreateFolderIfPathIsRelative(spriteAtlasOutputDir);
 
         AssetDatabase.Refresh();
-        statusMessage = "Created configured folders.";
+        statusMessage = "설정된 폴더를 생성했습니다.";
+    }
+
+    private void ResetPsdFileStates()
+    {
+        SavePrefs();
+        settingsAsset.psdFileStates = new List<PsdUiImporterPsdFileState>();
+        EditorUtility.SetDirty(settingsAsset);
+        AssetDatabase.SaveAssets();
+        statusMessage = "PSD 변경 기록을 초기화했습니다. 다음 변경 PSD 추출 시 모든 PSD가 대상이 됩니다.";
     }
 
     private static void CreateFolderIfPathIsRelative(string assetPath)
@@ -1676,6 +1835,11 @@ public sealed class GenericPsdUiImporter : EditorWindow
         createSpriteAtlasIfMissing = settingsAsset.createSpriteAtlasIfMissing;
         packSpriteAtlasAfterBuild = settingsAsset.packSpriteAtlasAfterBuild;
         showTagReference = settingsAsset.showTagReference;
+        auditShowUsage = settingsAsset.auditShowUsage;
+        auditShowWarnings = settingsAsset.auditShowWarnings;
+        auditShowImportSettings = settingsAsset.auditShowImportSettings;
+        auditShowPlatformSettings = settingsAsset.auditShowPlatformSettings;
+        auditShowAtlas = settingsAsset.auditShowAtlas;
     }
 
     private void SavePrefs()
@@ -1708,6 +1872,11 @@ public sealed class GenericPsdUiImporter : EditorWindow
         settingsAsset.createSpriteAtlasIfMissing = createSpriteAtlasIfMissing;
         settingsAsset.packSpriteAtlasAfterBuild = packSpriteAtlasAfterBuild;
         settingsAsset.showTagReference = showTagReference;
+        settingsAsset.auditShowUsage = auditShowUsage;
+        settingsAsset.auditShowWarnings = auditShowWarnings;
+        settingsAsset.auditShowImportSettings = auditShowImportSettings;
+        settingsAsset.auditShowPlatformSettings = auditShowPlatformSettings;
+        settingsAsset.auditShowAtlas = auditShowAtlas;
 
         EditorUtility.SetDirty(settingsAsset);
         AssetDatabase.SaveAssets();
@@ -1776,6 +1945,11 @@ public sealed class GenericPsdUiImporterSettings : ScriptableObject
     public bool createSpriteAtlasIfMissing = true;
     public bool packSpriteAtlasAfterBuild;
     public bool showTagReference;
+    public bool auditShowUsage = true;
+    public bool auditShowWarnings = true;
+    public bool auditShowImportSettings = true;
+    public bool auditShowPlatformSettings;
+    public bool auditShowAtlas = true;
     public List<PsdUiImporterPsdFileState> psdFileStates = new();
 }
 

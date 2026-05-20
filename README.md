@@ -60,9 +60,11 @@ The `Settings` tab can optionally manage Unity Sprite Atlases. Enable `Use Sprit
 - `!item`: saves this layer subtree as a separate item prefab. For `aa.psd` and `!item bb`, the generated prefab name is `aa_bb_Item`.
 - `!mask`: adds a Mask component.
 - `!cg`: adds a CanvasGroup component.
-- `!kr`: Korean-only layer.
+- `!kr` / `!ko`: Korean-only layer.
 - `!en`: English-only layer.
-- `!jp`: Japanese-only layer.
+- `!jp` / `!ja`: Japanese-only layer.
+- `!zh` / `!zhs` / `!zht`: Chinese language layers. `!zh-cn` and `!zh-tw` are also supported.
+- `!fr` / `!de` / `!es` / `!it` / `!pt` / `!ru`: additional language layers.
 - `!ref`: skipped reference layer/tree.
 - `!x1.5`: optional layer image scale suffix for extraction. Example: `icon !x1.5`.
 
@@ -82,7 +84,7 @@ Generated prefabs are intended to be overwritten by the importer. Keep game-spec
 
 ## Cleanup Images
 
-The same editor window has a `Texture Audit` tab. Select a generated prefab and click `Refresh` to list the textures used by that prefab, plus optional textures in the matching extracted PSD folder. Column toggles can show usage paths, import settings, platform overrides, and configured atlas status. Use `Select` or `Folder` on a row to jump to the texture or its containing folder in the Project window.
+The same editor window has a `Texture Audit` tab. Select a generated prefab and click `Refresh` to list the textures used by that prefab, plus optional textures in the matching extracted PSD folder. Column toggles can show usage paths, warnings, import settings, platform overrides, and configured atlas status. Use `Select` or `Folder` on a row to jump to the texture or its containing folder in the Project window. `Apply Recommended Settings` fixes common UI texture import settings, and `Add Missing To Atlas` updates the matching PSD atlas.
 
 ## Cleanup Images
 

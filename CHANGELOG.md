@@ -12,6 +12,8 @@
 - Added `!btn`, `!item`, `!mask`, and `!cg` layer tags.
 - Added changed-only PSD extraction and build support.
 - Localized primary editor labels to Korean.
+- Improved Texture Audit with immediate selected-prefab scanning, warning summaries, recommended setting fixes, and atlas update action.
+- Added more language layer tags including Korean/Japanese aliases, Chinese variants, French, German, Spanish, Italian, Portuguese, and Russian.
 
 ## 0.1.1
 

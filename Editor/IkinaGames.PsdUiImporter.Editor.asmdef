@@ -1,8 +1,8 @@
 ﻿{
-  "name": "Kuukiyomi.PsdUiImporter.Editor",
-  "rootNamespace": "Kuukiyomi.PsdUiImporter.Editor",
+  "name": "IkinaGames.PsdUiImporter.Editor",
+  "rootNamespace": "IkinaGames.PsdUiImporter.Editor",
   "references": [
-    "Kuukiyomi.PsdUiImporter.Runtime",
+    "IkinaGames.PsdUiImporter.Runtime",
     "Unity.TextMeshPro"
   ],
   "includePlatforms": [

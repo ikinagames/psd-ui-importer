@@ -1,6 +1,6 @@
 ﻿{
-  "name": "Kuukiyomi.PsdUiImporter.Runtime",
-  "rootNamespace": "Kuukiyomi.PsdUiImporter",
+  "name": "IkinaGames.PsdUiImporter.Runtime",
+  "rootNamespace": "IkinaGames.PsdUiImporter",
   "references": [],
   "includePlatforms": [],
   "excludePlatforms": [],

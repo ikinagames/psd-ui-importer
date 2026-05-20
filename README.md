@@ -29,12 +29,12 @@ https://github.com/ikinagames/psd-ui-importer.git#main
 ## Usage
 
 1. Open `Tools > PSD UI Importer > Generic PSD UI Importer`.
-2. In `PSD Extract`, set `Source PSD Folder` and `Extract Output Folder`.
-3. Click `Extract PSDs` to generate PNG files and JSON metadata.
-4. In `Build From Extracted JSON`, set the sprite root and output prefab folder.
-5. Select JSON files and click `Build Selected UI Prefabs`.
+2. Use the `Settings` tab to set folders and options. This can be done before any PSD files exist.
+3. Click `Create Folders` and `Save Settings` during first-time project setup.
+4. Use the `Build UI` tab for day-to-day work.
+5. Click `Extract PSDs` to generate PNG files and JSON metadata, then select JSON files and click `Build Selected UI Prefabs`.
 
-For a first-time setup, `Extract PSDs + Build UI Prefabs` runs both steps in one click.
+For repeated imports, `Extract PSDs + Build` runs both steps in one click.
 
 ## JSON Format
 
@@ -46,6 +46,10 @@ If your project already has another PSD export pipeline, you can skip the extrac
 ## Project Settings Asset
 
 The importer stores paths and build options in `Assets/Editor/PsdUiImporterSettings.asset`. Commit this asset to share the same PSD source folder, extraction output folder, prefab output folder, and import options with the team.
+
+## Sprite Atlas
+
+The `Settings` tab can optionally manage a Unity Sprite Atlas. Enable `Use Sprite Atlas`, choose an atlas asset path, then click `Update Atlas`. The importer registers the configured sprite root folder as the atlas packable. If `Pack atlas after build` is enabled, the atlas is packed after prefab generation.
 
 ## Layer Tags
 

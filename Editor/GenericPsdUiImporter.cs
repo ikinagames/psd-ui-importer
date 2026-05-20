@@ -8,7 +8,9 @@ using Newtonsoft.Json.Linq;
 using TMPro;
 using UnityEditor;
 using UnityEditor.PackageManager;
+using UnityEditor.U2D;
 using UnityEngine;
+using UnityEngine.U2D;
 using UnityEngine.UI;
 
 /// <summary>
@@ -39,6 +41,10 @@ public sealed class GenericPsdUiImporter : EditorWindow
     [SerializeField] private bool addLanguageSwitcher = true;
     [SerializeField] private SystemLanguage previewLanguage = SystemLanguage.Korean;
     [SerializeField] private TMP_FontAsset defaultFont;
+    [SerializeField] private bool useSpriteAtlas;
+    [SerializeField] private string spriteAtlasPath = "Assets/Art/Extracted/PsdUiImporter.spriteatlas";
+    [SerializeField] private bool createSpriteAtlasIfMissing = true;
+    [SerializeField] private bool packSpriteAtlasAfterBuild;
 
     private readonly List<JsonEntry> jsonEntries = new();
     private readonly List<PsdUiLanguageLayerSwitcher.Entry> languageEntries = new();
@@ -78,12 +84,14 @@ public sealed class GenericPsdUiImporter : EditorWindow
 
     private void OnGUI()
     {
-        activeTab = GUILayout.Toolbar(activeTab, new[] { "Build UI", "Cleanup Images" });
+        activeTab = GUILayout.Toolbar(activeTab, new[] { "Build UI", "Settings", "Cleanup Images" });
         EditorGUILayout.Space(4f);
 
         scroll = EditorGUILayout.BeginScrollView(scroll);
         if (activeTab == 0)
             DrawBuildUiTab();
+        else if (activeTab == 1)
+            DrawSettingsTab();
         else
             orphanedImageCleaner.Draw();
         EditorGUILayout.EndScrollView();
@@ -92,20 +100,51 @@ public sealed class GenericPsdUiImporter : EditorWindow
     private void DrawBuildUiTab()
     {
         EditorGUILayout.LabelField("Generic PSD UI Importer", EditorStyles.boldLabel);
-        EditorGUILayout.HelpBox(
-            "Extract PSD/PSB files into JSON + PNG files, then build UI prefabs from those exports. Project-specific importers can be built on top of this generic workflow.",
-            MessageType.Info);
+        DrawSettingsAssetField();
 
-        using (var change = new EditorGUI.ChangeCheckScope())
+        using (new EditorGUILayout.HorizontalScope())
         {
-            var pickedSettings = (GenericPsdUiImporterSettings)EditorGUILayout.ObjectField("Settings Asset", settingsAsset, typeof(GenericPsdUiImporterSettings), false);
-            if (change.changed && pickedSettings != null)
+            if (GUILayout.Button("Build Selected UI Prefabs", GUILayout.Height(32f)))
+                BuildSelected();
+
+            if (GUILayout.Button("Extract PSDs + Build", GUILayout.Height(32f)))
             {
-                settingsAsset = pickedSettings;
-                LoadPrefs();
-                RefreshJsonList();
+                if (ExtractPsdFiles())
+                    BuildSelected();
             }
         }
+
+        using (new EditorGUILayout.HorizontalScope())
+        {
+            if (GUILayout.Button("Refresh JSON List", GUILayout.Height(26f)))
+                RefreshJsonList();
+
+            if (GUILayout.Button("Extract PSDs", GUILayout.Height(26f)))
+                ExtractPsdFiles();
+
+            using (new EditorGUI.DisabledScope(!useSpriteAtlas))
+            {
+                if (GUILayout.Button("Update Atlas", GUILayout.Height(26f)))
+                    UpdateSpriteAtlas();
+            }
+        }
+
+        EditorGUILayout.Space(8f);
+        EditorGUILayout.LabelField("Build From Extracted JSON", EditorStyles.boldLabel);
+        DrawPathField("Metadata Folder", ref metadataDir, true);
+        DrawPathField("Sprite Root Folder", ref spriteRootDir, true);
+        DrawPathField("Output Prefab Folder", ref outputDir, true);
+
+        EditorGUILayout.Space(6f);
+        DrawJsonList();
+
+        DrawStatusMessage();
+    }
+
+    private void DrawSettingsTab()
+    {
+        EditorGUILayout.LabelField("Project Settings", EditorStyles.boldLabel);
+        DrawSettingsAssetField();
 
         EditorGUILayout.LabelField("PSD Extract", EditorStyles.boldLabel);
         DrawPathField("Source PSD Folder", ref psdSourceDir, true);
@@ -118,20 +157,8 @@ public sealed class GenericPsdUiImporter : EditorWindow
         exportForceTopil = EditorGUILayout.ToggleLeft("Force topil export only", exportForceTopil);
         exportSnapAlpha = EditorGUILayout.IntField("Snap Alpha Threshold (-1 off)", exportSnapAlpha);
 
-        using (new EditorGUILayout.HorizontalScope())
-        {
-            if (GUILayout.Button("Extract PSDs", GUILayout.Height(28f)))
-                ExtractPsdFiles();
-
-            if (GUILayout.Button("Extract PSDs + Build UI Prefabs", GUILayout.Height(28f)))
-            {
-                if (ExtractPsdFiles())
-                    BuildSelected();
-            }
-        }
-
         EditorGUILayout.Space(10f);
-        EditorGUILayout.LabelField("Build From Extracted JSON", EditorStyles.boldLabel);
+        EditorGUILayout.LabelField("Build UI", EditorStyles.boldLabel);
         DrawPathField("Sprite Root Folder", ref spriteRootDir, true);
         DrawPathField("Output Prefab Folder", ref outputDir, true);
 
@@ -143,22 +170,51 @@ public sealed class GenericPsdUiImporter : EditorWindow
         previewLanguage = (SystemLanguage)EditorGUILayout.EnumPopup("Preview Language", previewLanguage);
         defaultFont = (TMP_FontAsset)EditorGUILayout.ObjectField("Default TMP Font", defaultFont, typeof(TMP_FontAsset), false);
 
-        EditorGUILayout.Space(8f);
-        DrawJsonList();
+        EditorGUILayout.Space(10f);
+        EditorGUILayout.LabelField("Sprite Atlas", EditorStyles.boldLabel);
+        useSpriteAtlas = EditorGUILayout.ToggleLeft("Use Sprite Atlas", useSpriteAtlas);
+        using (new EditorGUI.DisabledScope(!useSpriteAtlas))
+        {
+            DrawPathField("Atlas Asset", ref spriteAtlasPath, false, "spriteatlas");
+            createSpriteAtlasIfMissing = EditorGUILayout.ToggleLeft("Create atlas asset if missing", createSpriteAtlasIfMissing);
+            packSpriteAtlasAfterBuild = EditorGUILayout.ToggleLeft("Pack atlas after build", packSpriteAtlasAfterBuild);
+        }
 
         EditorGUILayout.Space(8f);
         using (new EditorGUILayout.HorizontalScope())
         {
-            if (GUILayout.Button("Refresh JSON List", GUILayout.Height(28f)))
-                RefreshJsonList();
+            if (GUILayout.Button("Save Settings", GUILayout.Height(28f)))
+                SaveSettingsAndReport();
 
-            using (new EditorGUI.DisabledScope(jsonEntries.All(e => !e.selected)))
+            if (GUILayout.Button("Create Folders", GUILayout.Height(28f)))
+                CreateConfiguredFolders();
+
+            using (new EditorGUI.DisabledScope(!useSpriteAtlas))
             {
-                if (GUILayout.Button("Build Selected UI Prefabs", GUILayout.Height(28f)))
-                    BuildSelected();
+                if (GUILayout.Button("Update Atlas", GUILayout.Height(28f)))
+                    UpdateSpriteAtlas();
             }
         }
 
+        DrawStatusMessage();
+    }
+
+    private void DrawSettingsAssetField()
+    {
+        using (var change = new EditorGUI.ChangeCheckScope())
+        {
+            var pickedSettings = (GenericPsdUiImporterSettings)EditorGUILayout.ObjectField("Settings Asset", settingsAsset, typeof(GenericPsdUiImporterSettings), false);
+            if (change.changed && pickedSettings != null)
+            {
+                settingsAsset = pickedSettings;
+                LoadPrefs();
+                RefreshJsonList();
+            }
+        }
+    }
+
+    private void DrawStatusMessage()
+    {
         if (!string.IsNullOrEmpty(statusMessage))
         {
             EditorGUILayout.Space(8f);
@@ -166,7 +222,7 @@ public sealed class GenericPsdUiImporter : EditorWindow
         }
     }
 
-    private void DrawPathField(string label, ref string path, bool folder)
+    private void DrawPathField(string label, ref string path, bool folder, string extension = "json")
     {
         using (new EditorGUILayout.HorizontalScope())
         {
@@ -176,7 +232,7 @@ public sealed class GenericPsdUiImporter : EditorWindow
                 string absolute = ToAbsolutePath(path);
                 string picked = folder
                     ? EditorUtility.OpenFolderPanel(label, Directory.Exists(absolute) ? absolute : Application.dataPath, "")
-                    : EditorUtility.OpenFilePanel(label, Directory.Exists(absolute) ? absolute : Application.dataPath, "json");
+                    : EditorUtility.OpenFilePanel(label, File.Exists(absolute) ? Path.GetDirectoryName(absolute) : Application.dataPath, extension);
 
                 if (!string.IsNullOrEmpty(picked))
                     path = ToAssetPath(picked);
@@ -281,7 +337,16 @@ public sealed class GenericPsdUiImporter : EditorWindow
 
         AssetDatabase.SaveAssets();
         AssetDatabase.Refresh();
+        string atlasStatus = null;
+        if (useSpriteAtlas)
+        {
+            UpdateSpriteAtlas();
+            atlasStatus = statusMessage;
+        }
+
         statusMessage = $"Built {built} UI prefab(s). Sprites {spriteCount}, missing {missingSpriteCount}. Output: {outputDir}";
+        if (!string.IsNullOrEmpty(atlasStatus))
+            statusMessage += $"\n{atlasStatus}";
         Debug.Log($"[GenericPsdUiImporter] {statusMessage}");
     }
 
@@ -567,6 +632,100 @@ public sealed class GenericPsdUiImporter : EditorWindow
             importer.SaveAndReimport();
     }
 
+    private void UpdateSpriteAtlas()
+    {
+        SavePrefs();
+
+        if (!useSpriteAtlas)
+        {
+            statusMessage = "Sprite Atlas is disabled.";
+            return;
+        }
+
+        if (string.IsNullOrWhiteSpace(spriteAtlasPath))
+        {
+            statusMessage = "Sprite Atlas path is empty.";
+            return;
+        }
+
+        string normalizedAtlasPath = spriteAtlasPath.Replace('\\', '/');
+        if (!normalizedAtlasPath.EndsWith(".spriteatlas", StringComparison.OrdinalIgnoreCase))
+            normalizedAtlasPath += ".spriteatlas";
+        spriteAtlasPath = normalizedAtlasPath;
+
+        var atlas = AssetDatabase.LoadAssetAtPath<SpriteAtlas>(spriteAtlasPath);
+        if (atlas == null)
+        {
+            if (!createSpriteAtlasIfMissing)
+            {
+                statusMessage = $"Sprite Atlas not found: {spriteAtlasPath}";
+                return;
+            }
+
+            string atlasDirectory = Path.GetDirectoryName(spriteAtlasPath)?.Replace('\\', '/');
+            if (!string.IsNullOrEmpty(atlasDirectory))
+                Directory.CreateDirectory(ToAbsolutePath(atlasDirectory));
+
+            atlas = new SpriteAtlas();
+            AssetDatabase.CreateAsset(atlas, spriteAtlasPath);
+        }
+
+        string spriteFolder = spriteRootDir.Replace('\\', '/').TrimEnd('/');
+        if (!AssetDatabase.IsValidFolder(spriteFolder))
+        {
+            statusMessage = $"Sprite root folder not found: {spriteRootDir}";
+            return;
+        }
+
+        var folderAsset = AssetDatabase.LoadAssetAtPath<UnityEngine.Object>(spriteFolder);
+        if (folderAsset == null)
+        {
+            statusMessage = $"Sprite root folder could not be loaded: {spriteRootDir}";
+            return;
+        }
+
+        var packables = SpriteAtlasExtensions.GetPackables(atlas);
+        if (!packables.Contains(folderAsset))
+            SpriteAtlasExtensions.Add(atlas, new[] { folderAsset });
+
+        EditorUtility.SetDirty(atlas);
+        AssetDatabase.SaveAssets();
+        AssetDatabase.Refresh();
+
+        if (packSpriteAtlasAfterBuild)
+            SpriteAtlasUtility.PackAtlases(new[] { atlas }, EditorUserBuildSettings.activeBuildTarget, false);
+
+        statusMessage = $"Updated Sprite Atlas: {spriteAtlasPath}";
+    }
+
+    private void SaveSettingsAndReport()
+    {
+        SavePrefs();
+        string path = AssetDatabase.GetAssetPath(settingsAsset);
+        statusMessage = $"Saved settings: {(string.IsNullOrEmpty(path) ? SettingsAssetPath : path)}";
+    }
+
+    private void CreateConfiguredFolders()
+    {
+        SavePrefs();
+
+        CreateFolderIfPathIsRelative(psdSourceDir);
+        CreateFolderIfPathIsRelative(metadataDir);
+        CreateFolderIfPathIsRelative(spriteRootDir);
+        CreateFolderIfPathIsRelative(outputDir);
+
+        AssetDatabase.Refresh();
+        statusMessage = "Created configured folders.";
+    }
+
+    private static void CreateFolderIfPathIsRelative(string assetPath)
+    {
+        if (string.IsNullOrWhiteSpace(assetPath) || Path.IsPathRooted(assetPath))
+            return;
+
+        Directory.CreateDirectory(ToAbsolutePath(assetPath));
+    }
+
     private bool ExtractPsdFiles()
     {
         SavePrefs();
@@ -763,6 +922,12 @@ public sealed class GenericPsdUiImporter : EditorWindow
         addLanguageSwitcher = settingsAsset.addLanguageSwitcher;
         previewLanguage = settingsAsset.previewLanguage;
         defaultFont = settingsAsset.defaultFont;
+        useSpriteAtlas = settingsAsset.useSpriteAtlas;
+        spriteAtlasPath = string.IsNullOrWhiteSpace(settingsAsset.spriteAtlasPath)
+            ? "Assets/Art/Extracted/PsdUiImporter.spriteatlas"
+            : settingsAsset.spriteAtlasPath;
+        createSpriteAtlasIfMissing = settingsAsset.createSpriteAtlasIfMissing;
+        packSpriteAtlasAfterBuild = settingsAsset.packSpriteAtlasAfterBuild;
     }
 
     private void SavePrefs()
@@ -787,6 +952,10 @@ public sealed class GenericPsdUiImporter : EditorWindow
         settingsAsset.addLanguageSwitcher = addLanguageSwitcher;
         settingsAsset.previewLanguage = previewLanguage;
         settingsAsset.defaultFont = defaultFont;
+        settingsAsset.useSpriteAtlas = useSpriteAtlas;
+        settingsAsset.spriteAtlasPath = spriteAtlasPath;
+        settingsAsset.createSpriteAtlasIfMissing = createSpriteAtlasIfMissing;
+        settingsAsset.packSpriteAtlasAfterBuild = packSpriteAtlasAfterBuild;
 
         EditorUtility.SetDirty(settingsAsset);
         AssetDatabase.SaveAssets();
@@ -847,5 +1016,9 @@ public sealed class GenericPsdUiImporterSettings : ScriptableObject
     public bool addLanguageSwitcher = true;
     public SystemLanguage previewLanguage = SystemLanguage.Korean;
     public TMP_FontAsset defaultFont;
+    public bool useSpriteAtlas;
+    public string spriteAtlasPath = "Assets/Art/Extracted/PsdUiImporter.spriteatlas";
+    public bool createSpriteAtlasIfMissing = true;
+    public bool packSpriteAtlasAfterBuild;
 }
 #endif

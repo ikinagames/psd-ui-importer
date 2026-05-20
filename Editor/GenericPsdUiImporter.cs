@@ -296,7 +296,7 @@ public sealed class GenericPsdUiImporter : EditorWindow
             if (auditShowImportSettings) GUILayout.Label("Import Settings", GUILayout.Width(320f));
             if (auditShowPlatformSettings) GUILayout.Label("Platforms", GUILayout.Width(300f));
             if (auditShowAtlas) GUILayout.Label("Atlas", GUILayout.Width(90f));
-            GUILayout.Label("", GUILayout.Width(70f));
+            GUILayout.Label("", GUILayout.Width(150f));
         }
 
         foreach (var row in textureAuditRows)
@@ -315,10 +315,39 @@ public sealed class GenericPsdUiImporter : EditorWindow
                 if (auditShowAtlas)
                     GUILayout.Label(row.inConfiguredAtlas ? "Configured" : "-", GUILayout.Width(90f));
 
-                if (GUILayout.Button("Ping", GUILayout.Width(60f)))
-                    EditorGUIUtility.PingObject(row.texture != null ? row.texture : row.sprite);
+                if (GUILayout.Button("Select", GUILayout.Width(60f)))
+                    SelectAuditAsset(row);
+                if (GUILayout.Button("Folder", GUILayout.Width(60f)))
+                    SelectAuditFolder(row);
             }
         }
+    }
+
+    private static void SelectAuditAsset(TextureAuditRow row)
+    {
+        UnityEngine.Object target = row.sprite != null ? row.sprite : row.texture;
+        if (target == null)
+            target = AssetDatabase.LoadAssetAtPath<UnityEngine.Object>(row.path);
+
+        if (target == null)
+            return;
+
+        Selection.activeObject = target;
+        EditorGUIUtility.PingObject(target);
+    }
+
+    private static void SelectAuditFolder(TextureAuditRow row)
+    {
+        string folderPath = Path.GetDirectoryName(row.path)?.Replace('\\', '/');
+        if (string.IsNullOrEmpty(folderPath))
+            return;
+
+        var folder = AssetDatabase.LoadAssetAtPath<UnityEngine.Object>(folderPath);
+        if (folder == null)
+            return;
+
+        Selection.activeObject = folder;
+        EditorGUIUtility.PingObject(folder);
     }
 
     private void RefreshTextureAudit()

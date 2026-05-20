@@ -72,7 +72,7 @@ Generated prefabs are intended to be overwritten by the importer. Keep game-spec
 
 ## Cleanup Images
 
-The same editor window has a `Texture Audit` tab. Select a generated prefab and click `Refresh` to list the textures used by that prefab, plus optional textures in the matching extracted PSD folder. Column toggles can show usage paths, import settings, platform overrides, and configured atlas status.
+The same editor window has a `Texture Audit` tab. Select a generated prefab and click `Refresh` to list the textures used by that prefab, plus optional textures in the matching extracted PSD folder. Column toggles can show usage paths, import settings, platform overrides, and configured atlas status. Use `Select` or `Folder` on a row to jump to the texture or its containing folder in the Project window.
 
 ## Cleanup Images
 

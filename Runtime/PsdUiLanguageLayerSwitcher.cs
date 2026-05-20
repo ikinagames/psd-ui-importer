@@ -1,4 +1,6 @@
 using System;
+using System.Collections.Generic;
+using System.Linq;
 using UnityEngine;
 
 /// <summary>
@@ -21,6 +23,7 @@ public sealed class PsdUiLanguageLayerSwitcher : MonoBehaviour
     [SerializeField] private Entry[] entries = Array.Empty<Entry>();
 
     public SystemLanguage CurrentLanguage { get; private set; }
+    public IReadOnlyList<Entry> Entries => entries;
 
     private void OnEnable()
     {
@@ -50,6 +53,48 @@ public sealed class PsdUiLanguageLayerSwitcher : MonoBehaviour
         ApplyDefault();
     }
 
+    public void RebuildEntriesFromChildren(SystemLanguage initialLanguage)
+    {
+        var rebuilt = new List<Entry>();
+        foreach (var child in GetComponentsInChildren<Transform>(true).Skip(1))
+        {
+            if (!TryGetLanguage(child.name, out var language))
+                continue;
+
+            rebuilt.Add(new Entry
+            {
+                target = child.gameObject,
+                language = language,
+            });
+        }
+
+        SetEntries(rebuilt.ToArray(), initialLanguage);
+    }
+
+    public static bool TryGetLanguage(string name, out SystemLanguage language)
+    {
+        if (HasToken(name, "!kr"))
+        {
+            language = SystemLanguage.Korean;
+            return true;
+        }
+
+        if (HasToken(name, "!jp"))
+        {
+            language = SystemLanguage.Japanese;
+            return true;
+        }
+
+        if (HasToken(name, "!en"))
+        {
+            language = SystemLanguage.English;
+            return true;
+        }
+
+        language = SystemLanguage.Unknown;
+        return false;
+    }
+
     private static SystemLanguage Normalize(SystemLanguage language)
     {
         return language switch
@@ -58,5 +103,11 @@ public sealed class PsdUiLanguageLayerSwitcher : MonoBehaviour
             SystemLanguage.Japanese => SystemLanguage.Japanese,
             _ => SystemLanguage.English,
         };
+    }
+
+    private static bool HasToken(string name, string token)
+    {
+        if (string.IsNullOrEmpty(name)) return false;
+        return name.IndexOf(token, StringComparison.OrdinalIgnoreCase) >= 0;
     }
 }

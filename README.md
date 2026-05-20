@@ -49,7 +49,7 @@ The importer stores paths and build options in `Assets/Editor/PsdUiImporterSetti
 
 ## Sprite Atlas
 
-The `Settings` tab can optionally manage a Unity Sprite Atlas. Enable `Use Sprite Atlas`, choose an atlas asset path, then click `Update Atlas`. The importer registers the configured sprite root folder as the atlas packable. If `Pack atlas after build` is enabled, the atlas is packed after prefab generation.
+The `Settings` tab can optionally manage Unity Sprite Atlases. Enable `Use Sprite Atlas`, choose an atlas output folder, then click `Update Atlas`. The importer creates one atlas per selected PSD/JSON using the source name, such as `aaa.psd` -> `atlas_aaa.spriteatlas`, and registers that PSD's extracted sprite folder as the atlas packable. If `Pack atlas after build` is enabled, updated atlases are packed after prefab generation.
 
 ## Layer Tags
 
@@ -62,7 +62,19 @@ The `Settings` tab can optionally manage a Unity Sprite Atlas. Enable `Use Sprit
 
 Language-tagged layers are controlled by `PsdUiLanguageLayerSwitcher` on the generated prefab root.
 
+## Generated Prefabs And Variants
+
+Generated prefabs are intended to be overwritten by the importer. Keep game-specific components, wiring, animation, and overrides in prefab variants that inherit from the generated prefab.
+
+## Project Text Localization
+
+`!tmp` layers can be connected to project-specific text localization. Create a component that inherits `PsdUiTextLocalizerBase`, implement `TryGetText`, then assign that script in `Settings > Text Localizer Script`. During prefab generation, the importer adds the component to the generated prefab root and fills entries for every `!tmp` TextMeshProUGUI layer.
+
 ## Cleanup Images
 
-The same editor window has a `Cleanup Images` tab. It scans Texture2D assets in a selected folder and lists images that are not referenced by prefabs or scenes. Use it after regenerating PSD layer PNGs to find stale extracted images.
+The same editor window has a `Texture Audit` tab. Select a generated prefab and click `Refresh` to list the textures used by that prefab, plus optional textures in the matching extracted PSD folder. Column toggles can show usage paths, import settings, platform overrides, and configured atlas status.
+
+## Cleanup Images
+
+The `Cleanup Images` tab scans Texture2D assets in a selected folder and lists images that are not referenced by prefabs or scenes. Use it after regenerating PSD layer PNGs to find stale extracted images.
 

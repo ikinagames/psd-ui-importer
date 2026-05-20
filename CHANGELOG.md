@@ -4,8 +4,11 @@
 
 - Store Generic PSD UI Importer paths and options in a project settings asset at `Assets/Editor/PsdUiImporterSettings.asset`.
 - Split the editor window into `Build UI`, `Settings`, and `Cleanup Images` tabs.
-- Added optional Sprite Atlas setup and update support.
+- Added optional per-PSD Sprite Atlas setup and update support.
 - Added first-time setup controls that can save settings and create folders before PSD files exist.
+- Added `PsdUiTextLocalizerBase` for project-specific localization of `!tmp` layers.
+- Added language entry rebuilding support to `PsdUiLanguageLayerSwitcher`.
+- Added a `Texture Audit` tab for prefab texture usage and import setting inspection.
 
 ## 0.1.1
 

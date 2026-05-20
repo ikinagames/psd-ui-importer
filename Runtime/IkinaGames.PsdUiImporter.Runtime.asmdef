@@ -1,7 +1,9 @@
 ﻿{
   "name": "IkinaGames.PsdUiImporter.Runtime",
   "rootNamespace": "IkinaGames.PsdUiImporter",
-  "references": [],
+  "references": [
+    "Unity.TextMeshPro"
+  ],
   "includePlatforms": [],
   "excludePlatforms": [],
   "allowUnsafeCode": false,

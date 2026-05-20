@@ -255,7 +255,7 @@ public sealed class GenericPsdUiImporter : EditorWindow
 
         using (new EditorGUILayout.VerticalScope(EditorStyles.helpBox))
         {
-            DrawTagHelp("!tmp", "Image 대신 TextMeshProUGUI 생성");
+            DrawTagHelp("!tmp", "Image 대신 TextMeshProUGUI 생성, PSD 텍스트가 있으면 초기값 적용");
             DrawTagHelp("!btn", "Button 추가, Transition None 설정");
             DrawTagHelp("!item", "하위 루트를 별도 아이템 프리팹으로 저장");
             DrawTagHelp("!mask", "Mask 추가");
@@ -906,7 +906,7 @@ public sealed class GenericPsdUiImporter : EditorWindow
 
                 if (isTmp)
                 {
-                    var tmp = AddTmpText(go);
+                    var tmp = AddTmpText(go, layer["text"]?.ToString());
                     textEntries.Add(new PsdUiTextLocalizerBase.Entry
                     {
                         target = tmp,
@@ -1112,10 +1112,10 @@ public sealed class GenericPsdUiImporter : EditorWindow
         return type;
     }
 
-    private TextMeshProUGUI AddTmpText(GameObject go)
+    private TextMeshProUGUI AddTmpText(GameObject go, string initialText)
     {
         var tmp = go.AddComponent<TextMeshProUGUI>();
-        tmp.text = "";
+        tmp.text = initialText ?? "";
         tmp.raycastTarget = false;
         tmp.alignment = TextAlignmentOptions.Center;
         tmp.enableAutoSizing = true;

@@ -129,6 +129,33 @@ def extract_layer_image(layer) -> Image.Image | None:
     return layer.composite()
 
 
+def extract_layer_text(layer) -> str | None:
+    for attr in ("text", "text_data"):
+        value = getattr(layer, attr, None)
+        if callable(value):
+            try:
+                value = value()
+            except Exception:  # noqa: BLE001 - best-effort metadata extraction.
+                value = None
+        if isinstance(value, str) and value:
+            return normalize_text(value)
+
+    engine_dict = getattr(layer, "engine_dict", None)
+    if engine_dict is not None:
+        try:
+            value = engine_dict.get("Editor", None)
+            if isinstance(value, str) and value:
+                return normalize_text(value)
+        except Exception:  # noqa: BLE001
+            pass
+
+    return None
+
+
+def normalize_text(value: str) -> str:
+    return value.replace("\r\n", "\n").replace("\r", "\n")
+
+
 def walk_layers(layer, parent_path: str = "", parent_visible: bool = True, output_dir: Path | None = None):
     if output_dir is None:
         output_dir = OPTS.out_dir
@@ -162,6 +189,10 @@ def walk_layers(layer, parent_path: str = "", parent_visible: bool = True, outpu
                 "height": child.height,
             },
         }
+
+        text = extract_layer_text(child)
+        if text is not None:
+            info["text"] = text
 
         if child.kind == "group":
             info["children"] = walk_layers(child, relative_path, visible, output_dir)

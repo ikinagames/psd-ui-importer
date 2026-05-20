@@ -55,7 +55,7 @@ The `Settings` tab can optionally manage Unity Sprite Atlases. Enable `Use Sprit
 
 ## Layer Tags
 
-- `!tmp`: creates a TextMeshProUGUI object instead of an Image.
+- `!tmp`: creates a TextMeshProUGUI object instead of an Image. If the PSD text layer exposes text, that string is used as the initial TMP text.
 - `!btn`: adds a Button component with transition set to None.
 - `!item`: saves this layer subtree as a separate item prefab. For `aa.psd` and `!item bb`, the generated prefab name is `aa_bb_Item`.
 - `!mask`: adds a Mask component.

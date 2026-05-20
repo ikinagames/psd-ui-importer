@@ -14,6 +14,7 @@
 - Localized primary editor labels to Korean.
 - Improved Texture Audit with immediate selected-prefab scanning, warning summaries, recommended setting fixes, and atlas update action.
 - Added more language layer tags including Korean/Japanese aliases, Chinese variants, French, German, Spanish, Italian, Portuguese, and Russian.
+- Preserve PSD text layer strings in JSON and apply them as initial text for `!tmp` TextMeshProUGUI layers.
 
 ## 0.1.1
 

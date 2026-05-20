@@ -10,6 +10,8 @@
 - Added language entry rebuilding support to `PsdUiLanguageLayerSwitcher`.
 - Added a `Texture Audit` tab for prefab texture usage and import setting inspection.
 - Added `!btn`, `!item`, `!mask`, and `!cg` layer tags.
+- Added changed-only PSD extraction and build support.
+- Localized primary editor labels to Korean.
 
 ## 0.1.1
 

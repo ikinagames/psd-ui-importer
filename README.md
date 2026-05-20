@@ -36,6 +36,8 @@ https://github.com/ikinagames/psd-ui-importer.git#main
 
 For repeated imports, `Extract PSDs + Build` runs both steps in one click.
 
+`Extract Changed PSDs + Build` only re-extracts PSD/PSB files whose modified time or file size changed since the last successful extraction, then rebuilds the matching prefabs.
+
 ## JSON Format
 
 The bundled extractor creates JSON files with `source`, `canvas`, and recursive `layers` entries. Each layer can contain `name`, `kind`, `visible`, `bbox`, `children`, and `png` fields.
@@ -67,6 +69,8 @@ The `Settings` tab can optionally manage Unity Sprite Atlases. Enable `Use Sprit
 Language-tagged layers are controlled by `PsdUiLanguageLayerSwitcher` on the generated prefab root.
 
 The `Settings` tab includes a foldout tag reference for quick in-editor lookup.
+
+The editor UI uses Korean labels for day-to-day controls while keeping package code and generated asset names stable.
 
 ## Generated Prefabs And Variants
 

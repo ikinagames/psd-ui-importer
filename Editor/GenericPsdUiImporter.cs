@@ -115,7 +115,7 @@ public sealed class GenericPsdUiImporter : EditorWindow
 
     private void OnGUI()
     {
-        activeTab = GUILayout.Toolbar(activeTab, new[] { "Build UI", "Settings", "Texture Audit", "Cleanup Images" });
+        activeTab = GUILayout.Toolbar(activeTab, new[] { "UI 생성", "설정", "텍스처 검사", "이미지 정리" });
         EditorGUILayout.Space(4f);
 
         scroll = EditorGUILayout.BeginScrollView(scroll);
@@ -132,15 +132,15 @@ public sealed class GenericPsdUiImporter : EditorWindow
 
     private void DrawBuildUiTab()
     {
-        EditorGUILayout.LabelField("Generic PSD UI Importer", EditorStyles.boldLabel);
+        EditorGUILayout.LabelField("PSD UI Importer", EditorStyles.boldLabel);
         DrawSettingsAssetField();
 
         using (new EditorGUILayout.HorizontalScope())
         {
-            if (GUILayout.Button("Build Selected UI Prefabs", GUILayout.Height(32f)))
+            if (GUILayout.Button("선택 UI 프리팹 생성", GUILayout.Height(32f)))
                 BuildSelected();
 
-            if (GUILayout.Button("Extract PSDs + Build", GUILayout.Height(32f)))
+            if (GUILayout.Button("PSD 추출 + 생성", GUILayout.Height(32f)))
             {
                 if (ExtractPsdFiles())
                     BuildSelected();
@@ -149,24 +149,27 @@ public sealed class GenericPsdUiImporter : EditorWindow
 
         using (new EditorGUILayout.HorizontalScope())
         {
-            if (GUILayout.Button("Refresh JSON List", GUILayout.Height(26f)))
+            if (GUILayout.Button("JSON 목록 갱신", GUILayout.Height(26f)))
                 RefreshJsonList();
 
-            if (GUILayout.Button("Extract PSDs", GUILayout.Height(26f)))
+            if (GUILayout.Button("PSD 추출", GUILayout.Height(26f)))
                 ExtractPsdFiles();
+
+            if (GUILayout.Button("변경 PSD 추출 + 생성", GUILayout.Height(26f)))
+                ExtractChangedPsdFilesAndBuild();
 
             using (new EditorGUI.DisabledScope(!useSpriteAtlas))
             {
-                if (GUILayout.Button("Update Atlas", GUILayout.Height(26f)))
+                if (GUILayout.Button("아틀라스 갱신", GUILayout.Height(26f)))
                     UpdateSpriteAtlas();
             }
         }
 
         EditorGUILayout.Space(8f);
-        EditorGUILayout.LabelField("Build From Extracted JSON", EditorStyles.boldLabel);
-        DrawPathField("Metadata Folder", ref metadataDir, true);
-        DrawPathField("Sprite Root Folder", ref spriteRootDir, true);
-        DrawPathField("Output Prefab Folder", ref outputDir, true);
+        EditorGUILayout.LabelField("추출된 JSON에서 생성", EditorStyles.boldLabel);
+        DrawPathField("메타데이터 폴더", ref metadataDir, true);
+        DrawPathField("스프라이트 루트 폴더", ref spriteRootDir, true);
+        DrawPathField("프리팹 출력 폴더", ref outputDir, true);
 
         EditorGUILayout.Space(6f);
         DrawJsonList();
@@ -176,59 +179,59 @@ public sealed class GenericPsdUiImporter : EditorWindow
 
     private void DrawSettingsTab()
     {
-        EditorGUILayout.LabelField("Project Settings", EditorStyles.boldLabel);
+        EditorGUILayout.LabelField("프로젝트 설정", EditorStyles.boldLabel);
         DrawSettingsAssetField();
 
-        EditorGUILayout.LabelField("PSD Extract", EditorStyles.boldLabel);
-        DrawPathField("Source PSD Folder", ref psdSourceDir, true);
-        DrawPathField("Extract Output Folder", ref metadataDir, true);
-        exportScale = Mathf.Max(0.01f, EditorGUILayout.FloatField("Export Scale", exportScale));
-        exportMaxDim = Mathf.Max(0, EditorGUILayout.IntField("Max Image Dimension", exportMaxDim));
-        exportPotSnap = EditorGUILayout.ToggleLeft("Snap near power-of-two textures", exportPotSnap);
+        EditorGUILayout.LabelField("PSD 추출", EditorStyles.boldLabel);
+        DrawPathField("PSD 원본 폴더", ref psdSourceDir, true);
+        DrawPathField("추출 출력 폴더", ref metadataDir, true);
+        exportScale = Mathf.Max(0.01f, EditorGUILayout.FloatField("추출 스케일", exportScale));
+        exportMaxDim = Mathf.Max(0, EditorGUILayout.IntField("최대 이미지 크기", exportMaxDim));
+        exportPotSnap = EditorGUILayout.ToggleLeft("2의 거듭제곱에 가까운 텍스처 보정", exportPotSnap);
         using (new EditorGUI.DisabledScope(!exportPotSnap))
-            exportPotThreshold = Mathf.Max(1.001f, EditorGUILayout.FloatField("POT Threshold", exportPotThreshold));
-        exportForceTopil = EditorGUILayout.ToggleLeft("Force topil export only", exportForceTopil);
-        exportSnapAlpha = EditorGUILayout.IntField("Snap Alpha Threshold (-1 off)", exportSnapAlpha);
+            exportPotThreshold = Mathf.Max(1.001f, EditorGUILayout.FloatField("POT 보정 임계값", exportPotThreshold));
+        exportForceTopil = EditorGUILayout.ToggleLeft("topil 방식만 사용", exportForceTopil);
+        exportSnapAlpha = EditorGUILayout.IntField("알파 스냅 임계값 (-1 꺼짐)", exportSnapAlpha);
 
         EditorGUILayout.Space(10f);
-        EditorGUILayout.LabelField("Build UI", EditorStyles.boldLabel);
-        DrawPathField("Sprite Root Folder", ref spriteRootDir, true);
-        DrawPathField("Output Prefab Folder", ref outputDir, true);
-        DrawPathField("Item Prefab Folder", ref itemPrefabOutputDir, true);
+        EditorGUILayout.LabelField("UI 생성", EditorStyles.boldLabel);
+        DrawPathField("스프라이트 루트 폴더", ref spriteRootDir, true);
+        DrawPathField("프리팹 출력 폴더", ref outputDir, true);
+        DrawPathField("아이템 프리팹 폴더", ref itemPrefabOutputDir, true);
 
         EditorGUILayout.Space(6f);
-        replaceExistingContent = EditorGUILayout.ToggleLeft("Replace generated children when prefab exists", replaceExistingContent);
-        prepareSprites = EditorGUILayout.ToggleLeft("Prepare PNG import settings as UI sprites", prepareSprites);
-        convertTmpLayers = EditorGUILayout.ToggleLeft("Convert !tmp layers to TextMeshProUGUI", convertTmpLayers);
-        addLanguageSwitcher = EditorGUILayout.ToggleLeft("Add !kr / !en / !jp language switcher", addLanguageSwitcher);
-        addTextLocalizer = EditorGUILayout.ToggleLeft("Add project text localizer for !tmp layers", addTextLocalizer);
+        replaceExistingContent = EditorGUILayout.ToggleLeft("기존 프리팹의 생성 자식 교체", replaceExistingContent);
+        prepareSprites = EditorGUILayout.ToggleLeft("PNG를 UI Sprite 설정으로 준비", prepareSprites);
+        convertTmpLayers = EditorGUILayout.ToggleLeft("!tmp 레이어를 TextMeshProUGUI로 변환", convertTmpLayers);
+        addLanguageSwitcher = EditorGUILayout.ToggleLeft("!kr / !en / !jp 언어 전환 컴포넌트 추가", addLanguageSwitcher);
+        addTextLocalizer = EditorGUILayout.ToggleLeft("!tmp 레이어용 프로젝트 텍스트 로컬라이저 추가", addTextLocalizer);
         using (new EditorGUI.DisabledScope(!addTextLocalizer))
-            textLocalizerScript = (MonoScript)EditorGUILayout.ObjectField("Text Localizer Script", textLocalizerScript, typeof(MonoScript), false);
-        previewLanguage = (SystemLanguage)EditorGUILayout.EnumPopup("Preview Language", previewLanguage);
-        defaultFont = (TMP_FontAsset)EditorGUILayout.ObjectField("Default TMP Font", defaultFont, typeof(TMP_FontAsset), false);
+            textLocalizerScript = (MonoScript)EditorGUILayout.ObjectField("텍스트 로컬라이저 스크립트", textLocalizerScript, typeof(MonoScript), false);
+        previewLanguage = (SystemLanguage)EditorGUILayout.EnumPopup("미리보기 언어", previewLanguage);
+        defaultFont = (TMP_FontAsset)EditorGUILayout.ObjectField("기본 TMP 폰트", defaultFont, typeof(TMP_FontAsset), false);
 
         EditorGUILayout.Space(10f);
-        EditorGUILayout.LabelField("Sprite Atlas", EditorStyles.boldLabel);
-        useSpriteAtlas = EditorGUILayout.ToggleLeft("Use Sprite Atlas", useSpriteAtlas);
+        EditorGUILayout.LabelField("스프라이트 아틀라스", EditorStyles.boldLabel);
+        useSpriteAtlas = EditorGUILayout.ToggleLeft("스프라이트 아틀라스 사용", useSpriteAtlas);
         using (new EditorGUI.DisabledScope(!useSpriteAtlas))
         {
-            DrawPathField("Atlas Output Folder", ref spriteAtlasOutputDir, true);
-            createSpriteAtlasIfMissing = EditorGUILayout.ToggleLeft("Create atlas asset if missing", createSpriteAtlasIfMissing);
-            packSpriteAtlasAfterBuild = EditorGUILayout.ToggleLeft("Pack atlas after build", packSpriteAtlasAfterBuild);
+            DrawPathField("아틀라스 출력 폴더", ref spriteAtlasOutputDir, true);
+            createSpriteAtlasIfMissing = EditorGUILayout.ToggleLeft("아틀라스가 없으면 생성", createSpriteAtlasIfMissing);
+            packSpriteAtlasAfterBuild = EditorGUILayout.ToggleLeft("생성 후 아틀라스 Pack", packSpriteAtlasAfterBuild);
         }
 
         EditorGUILayout.Space(8f);
         using (new EditorGUILayout.HorizontalScope())
         {
-            if (GUILayout.Button("Save Settings", GUILayout.Height(28f)))
+            if (GUILayout.Button("설정 저장", GUILayout.Height(28f)))
                 SaveSettingsAndReport();
 
-            if (GUILayout.Button("Create Folders", GUILayout.Height(28f)))
+            if (GUILayout.Button("폴더 생성", GUILayout.Height(28f)))
                 CreateConfiguredFolders();
 
             using (new EditorGUI.DisabledScope(!useSpriteAtlas))
             {
-                if (GUILayout.Button("Update Atlas", GUILayout.Height(28f)))
+                if (GUILayout.Button("아틀라스 갱신", GUILayout.Height(28f)))
                     UpdateSpriteAtlas();
             }
         }
@@ -240,22 +243,22 @@ public sealed class GenericPsdUiImporter : EditorWindow
     private void DrawTagReference()
     {
         EditorGUILayout.Space(10f);
-        showTagReference = EditorGUILayout.Foldout(showTagReference, "Tag Reference", true);
+        showTagReference = EditorGUILayout.Foldout(showTagReference, "태그 참고", true);
         if (!showTagReference)
             return;
 
         using (new EditorGUILayout.VerticalScope(EditorStyles.helpBox))
         {
-            DrawTagHelp("!tmp", "Create a TextMeshProUGUI object instead of an Image.");
-            DrawTagHelp("!btn", "Add Button and set Transition to None.");
-            DrawTagHelp("!item", "Save this subtree as a separate item prefab.");
-            DrawTagHelp("!mask", "Add Mask.");
-            DrawTagHelp("!cg", "Add CanvasGroup.");
-            DrawTagHelp("!kr / !en / !jp", "Register language-specific layer entries.");
-            DrawTagHelp("!ref", "Skip this reference layer/tree during extraction and build.");
-            DrawTagHelp("!x1.5", "Override extraction scale for this layer image.");
+            DrawTagHelp("!tmp", "Image 대신 TextMeshProUGUI 생성");
+            DrawTagHelp("!btn", "Button 추가, Transition None 설정");
+            DrawTagHelp("!item", "하위 루트를 별도 아이템 프리팹으로 저장");
+            DrawTagHelp("!mask", "Mask 추가");
+            DrawTagHelp("!cg", "CanvasGroup 추가");
+            DrawTagHelp("!kr / !en / !jp", "언어별 레이어 엔트리 등록");
+            DrawTagHelp("!ref", "참고용 레이어/트리는 추출 및 생성에서 제외");
+            DrawTagHelp("!x1.5", "해당 레이어 이미지 추출 스케일 override");
             EditorGUILayout.Space(3f);
-            EditorGUILayout.LabelField("Example", EditorStyles.boldLabel);
+            EditorGUILayout.LabelField("예시", EditorStyles.boldLabel);
             EditorGUILayout.LabelField("aa.psd + !item bb -> aa_bb_Item.prefab");
         }
     }
@@ -273,7 +276,7 @@ public sealed class GenericPsdUiImporter : EditorWindow
     {
         using (var change = new EditorGUI.ChangeCheckScope())
         {
-            var pickedSettings = (GenericPsdUiImporterSettings)EditorGUILayout.ObjectField("Settings Asset", settingsAsset, typeof(GenericPsdUiImporterSettings), false);
+            var pickedSettings = (GenericPsdUiImporterSettings)EditorGUILayout.ObjectField("설정 에셋", settingsAsset, typeof(GenericPsdUiImporterSettings), false);
             if (change.changed && pickedSettings != null)
             {
                 settingsAsset = pickedSettings;
@@ -635,14 +638,26 @@ public sealed class GenericPsdUiImporter : EditorWindow
 
     private void BuildSelected()
     {
+        BuildJsonEntries(jsonEntries.Where(e => e.selected));
+    }
+
+    private void BuildJsonPaths(IEnumerable<string> jsonAssetPaths)
+    {
+        var pathSet = new HashSet<string>(jsonAssetPaths.Select(path => path.Replace('\\', '/')), StringComparer.OrdinalIgnoreCase);
+        BuildJsonEntries(jsonEntries.Where(entry => pathSet.Contains(entry.path.Replace('\\', '/'))));
+    }
+
+    private void BuildJsonEntries(IEnumerable<JsonEntry> entries)
+    {
         SavePrefs();
         Directory.CreateDirectory(ToAbsolutePath(outputDir));
 
         int built = 0;
         spriteCount = 0;
         missingSpriteCount = 0;
+        var buildEntries = entries.ToList();
 
-        foreach (var entry in jsonEntries.Where(e => e.selected))
+        foreach (var entry in buildEntries)
         {
             try
             {
@@ -661,7 +676,7 @@ public sealed class GenericPsdUiImporter : EditorWindow
         var updatedAtlases = new List<string>();
         if (useSpriteAtlas)
         {
-            foreach (var entry in jsonEntries.Where(e => e.selected))
+            foreach (var entry in buildEntries)
             {
                 string updated = UpdateSpriteAtlasForJson(entry.path);
                 if (!string.IsNullOrEmpty(updated))
@@ -1350,10 +1365,34 @@ public sealed class GenericPsdUiImporter : EditorWindow
 
     private bool ExtractPsdFiles()
     {
+        return ExtractPsdFiles(null, true);
+    }
+
+    private void ExtractChangedPsdFilesAndBuild()
+    {
+        var changedPsdFiles = GetChangedPsdFiles();
+        if (changedPsdFiles.Count == 0)
+        {
+            statusMessage = "변경된 PSD/PSB가 없습니다.";
+            return;
+        }
+
+        if (!ExtractPsdFiles(changedPsdFiles, true))
+            return;
+
+        RefreshJsonList();
+        var changedJsonPaths = changedPsdFiles
+            .Select(path => $"{metadataDir.TrimEnd('/', '\\')}/{Path.GetFileNameWithoutExtension(path)}.json".Replace('\\', '/'))
+            .ToList();
+        BuildJsonPaths(changedJsonPaths);
+    }
+
+    private bool ExtractPsdFiles(IReadOnlyList<string> psdFiles, bool updatePsdState)
+    {
         SavePrefs();
 
         string sourceDir = ToAbsolutePath(psdSourceDir);
-        if (!Directory.Exists(sourceDir))
+        if ((psdFiles == null || psdFiles.Count == 0) && !Directory.Exists(sourceDir))
         {
             EditorUtility.DisplayDialog("PSD Extract", $"Source PSD folder not found:\n{psdSourceDir}", "OK");
             statusMessage = $"Source PSD folder not found: {psdSourceDir}";
@@ -1399,8 +1438,11 @@ public sealed class GenericPsdUiImporter : EditorWindow
             if (usePyLauncher)
                 startInfo.ArgumentList.Add("-3");
             startInfo.ArgumentList.Add(scriptPath);
-            startInfo.ArgumentList.Add("--psd-dir");
-            startInfo.ArgumentList.Add(sourceDir);
+            if (psdFiles == null || psdFiles.Count == 0)
+            {
+                startInfo.ArgumentList.Add("--psd-dir");
+                startInfo.ArgumentList.Add(sourceDir);
+            }
             startInfo.ArgumentList.Add("--out-dir");
             startInfo.ArgumentList.Add(outputDirAbsolute);
             startInfo.ArgumentList.Add("--scale");
@@ -1417,6 +1459,11 @@ public sealed class GenericPsdUiImporter : EditorWindow
             {
                 startInfo.ArgumentList.Add("--snap-alpha");
                 startInfo.ArgumentList.Add(Mathf.Clamp(exportSnapAlpha, 0, 255).ToString(CultureInfo.InvariantCulture));
+            }
+            if (psdFiles != null)
+            {
+                foreach (string psdFile in psdFiles)
+                    startInfo.ArgumentList.Add(psdFile);
             }
 
             using var process = System.Diagnostics.Process.Start(startInfo);
@@ -1453,8 +1500,81 @@ public sealed class GenericPsdUiImporter : EditorWindow
         AssetDatabase.Refresh();
         spriteRootDir = metadataDir;
         RefreshJsonList();
-        statusMessage = $"PSD extract complete. Output: {metadataDir}";
+        if (updatePsdState)
+            UpdatePsdFileStates(psdFiles);
+        statusMessage = psdFiles != null && psdFiles.Count > 0
+            ? $"PSD 추출 완료: {psdFiles.Count}개. 출력: {metadataDir}"
+            : $"PSD 추출 완료. 출력: {metadataDir}";
         return true;
+    }
+
+    private List<string> GetChangedPsdFiles()
+    {
+        string sourceDir = ToAbsolutePath(psdSourceDir);
+        if (!Directory.Exists(sourceDir))
+        {
+            statusMessage = $"PSD 원본 폴더를 찾을 수 없습니다: {psdSourceDir}";
+            return new List<string>();
+        }
+
+        settingsAsset.psdFileStates ??= new List<PsdUiImporterPsdFileState>();
+        var previous = settingsAsset.psdFileStates
+            .Where(state => !string.IsNullOrEmpty(state.path))
+            .ToDictionary(state => state.path.Replace('\\', '/'), StringComparer.OrdinalIgnoreCase);
+
+        var changed = new List<string>();
+        foreach (string path in Directory.GetFiles(sourceDir, "*.*", SearchOption.TopDirectoryOnly)
+                     .Where(IsPsdFile)
+                     .OrderBy(path => path, StringComparer.OrdinalIgnoreCase))
+        {
+            string assetPath = ToAssetPath(path).Replace('\\', '/');
+            var info = new FileInfo(path);
+            if (!previous.TryGetValue(assetPath, out var oldState) ||
+                oldState.lastWriteTicksUtc != info.LastWriteTimeUtc.Ticks ||
+                oldState.length != info.Length)
+            {
+                changed.Add(path);
+            }
+        }
+
+        return changed;
+    }
+
+    private void UpdatePsdFileStates(IReadOnlyList<string> updatedFiles)
+    {
+        settingsAsset.psdFileStates ??= new List<PsdUiImporterPsdFileState>();
+        var states = settingsAsset.psdFileStates
+            .Where(state => !string.IsNullOrEmpty(state.path))
+            .ToDictionary(state => state.path.Replace('\\', '/'), StringComparer.OrdinalIgnoreCase);
+
+        IEnumerable<string> files = updatedFiles != null && updatedFiles.Count > 0
+            ? updatedFiles
+            : Directory.Exists(ToAbsolutePath(psdSourceDir))
+                ? Directory.GetFiles(ToAbsolutePath(psdSourceDir), "*.*", SearchOption.TopDirectoryOnly).Where(IsPsdFile)
+                : Enumerable.Empty<string>();
+
+        foreach (string path in files)
+        {
+            var info = new FileInfo(path);
+            string assetPath = ToAssetPath(path).Replace('\\', '/');
+            states[assetPath] = new PsdUiImporterPsdFileState
+            {
+                path = assetPath,
+                lastWriteTicksUtc = info.LastWriteTimeUtc.Ticks,
+                length = info.Length,
+            };
+        }
+
+        settingsAsset.psdFileStates = states.Values.OrderBy(state => state.path, StringComparer.OrdinalIgnoreCase).ToList();
+        EditorUtility.SetDirty(settingsAsset);
+        AssetDatabase.SaveAssets();
+    }
+
+    private static bool IsPsdFile(string path)
+    {
+        string extension = Path.GetExtension(path);
+        return extension.Equals(".psd", StringComparison.OrdinalIgnoreCase) ||
+               extension.Equals(".psb", StringComparison.OrdinalIgnoreCase);
     }
 
     private static string GetExtractScriptPath()
@@ -1656,5 +1776,14 @@ public sealed class GenericPsdUiImporterSettings : ScriptableObject
     public bool createSpriteAtlasIfMissing = true;
     public bool packSpriteAtlasAfterBuild;
     public bool showTagReference;
+    public List<PsdUiImporterPsdFileState> psdFileStates = new();
+}
+
+[Serializable]
+public sealed class PsdUiImporterPsdFileState
+{
+    public string path;
+    public long lastWriteTicksUtc;
+    public long length;
 }
 #endif
